@@ -141,13 +141,24 @@ ipcMain.handle('agent:is-ready', () => {
   return gemini.isInitialized()
 })
 
-// Streaming chat - sends events back to renderer
-ipcMain.handle('agent:chat', async (_, messages: gemini.ChatMessage[], grantedFolders: string[], selectedFile?: string) => {
-  return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile)
-})
+ipcMain.handle(
+  'agent:chat',
+  async (_, messages: gemini.ChatMessage[], grantedFolders: string[], selectedFile?: string) => {
+    return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile)
+  }
+)
 
 ipcMain.handle('agent:test', async () => {
   return await gemini.testConnection()
+})
+
+// Metrics handlers
+ipcMain.handle('agent:get-metrics', () => {
+  return gemini.getMetrics()
+})
+
+ipcMain.handle('agent:reset-metrics', () => {
+  gemini.resetMetrics()
 })
 
 // ============ App Lifecycle ============

@@ -41,17 +41,41 @@ interface ToolCallResult {
   result: unknown
 }
 
+interface TaskClassification {
+  taskType: string
+  requiresVision: boolean
+  requiresMultipleTools: boolean
+  estimatedSteps: number
+  complexityScore: number
+  recommendedExecutor: 'flash-minimal' | 'flash-high' | 'pro-high'
+  reasoning: string
+}
+
+interface SessionMetrics {
+  tasksCompleted: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  modelUsage: Record<string, number>
+  escalations: number
+  totalCost: number
+  startTime: number
+  sessionDuration: number
+  estimatedSavings: number
+}
+
 interface AgentResponse {
   message: string
   toolCalls?: ToolCallResult[]
   error?: string
+  classification?: TaskClassification
+  executorUsed?: 'flash-minimal' | 'flash-high' | 'pro-high'
 }
 
 interface MomentumAPI {
   selectFolder: () => Promise<string | null>
   getVersion: () => Promise<string>
   platform: string
-  
+
   fs: {
     listDir: (path: string) => Promise<FileEntry[]>
     expandDir: (path: string) => Promise<FileEntry[]>
@@ -71,21 +95,31 @@ interface MomentumAPI {
     restoreFromTrash: (trashPath: string) => Promise<OperationResult>
     emptyTrash: () => Promise<OperationResult>
   }
-  
+
   agent: {
     init: (apiKey: string) => Promise<{ success: boolean; error?: string }>
     isReady: () => Promise<boolean>
-    chat: (messages: ChatMessage[], grantedFolders: string[]) => Promise<AgentResponse>
+    chat: (
+      messages: ChatMessage[],
+      grantedFolders: string[],
+      selectedFile?: string
+    ) => Promise<AgentResponse>
     test: () => Promise<{ success: boolean; error?: string }>
-    
-    // Streaming events
+    getMetrics: () => Promise<SessionMetrics>
+    resetMetrics: () => Promise<void>
     onStreamChunk: (callback: (chunk: string) => void) => () => void
     onStreamEnd: (callback: () => void) => () => void
     onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => () => void
     onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
+    onRoutingStart: (callback: () => void) => () => void
+    onRoutingComplete: (callback: (classification: TaskClassification) => void) => () => void
   }
 }
 
-interface Window {
-  api: MomentumAPI
+declare global {
+  interface Window {
+    api: MomentumAPI
+  }
 }
+
+export {}
