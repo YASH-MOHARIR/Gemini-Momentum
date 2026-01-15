@@ -179,7 +179,13 @@ function App(): JSX.Element {
         .map(m => ({ role: m.role, content: m.content }))
       
       const grantedFolders = folders.map(f => f.path)
-      const response = await window.api.agent.chat(chatHistory, grantedFolders)
+      
+      // Pass selected file path to agent
+      const response = await window.api.agent.chat(
+        chatHistory, 
+        grantedFolders,
+        selectedFile?.path
+      )
       
       setIsStreaming(false)
       setStreamingContent('')
@@ -409,7 +415,9 @@ function App(): JSX.Element {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={hasAnyFolder 
-                    ? "Ask Momentum to organize files, extract data, create reports..." 
+                    ? selectedFile 
+                      ? `Ask about ${selectedFile.name}...`
+                      : "Ask Momentum to organize files, extract data, create reports..." 
                     : "Select a folder to get started..."}
                   disabled={!hasAnyFolder || isProcessing}
                   className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"

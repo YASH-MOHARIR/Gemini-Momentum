@@ -101,8 +101,8 @@ const api = {
       ipcRenderer.invoke('agent:init', apiKey),
     isReady: (): Promise<boolean> => 
       ipcRenderer.invoke('agent:is-ready'),
-    chat: (messages: ChatMessage[], grantedFolders: string[]): Promise<AgentResponse> => 
-      ipcRenderer.invoke('agent:chat', messages, grantedFolders),
+    chat: (messages: ChatMessage[], grantedFolders: string[], selectedFile?: string): Promise<AgentResponse> => 
+      ipcRenderer.invoke('agent:chat', messages, grantedFolders, selectedFile),
     test: (): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('agent:test'),
     

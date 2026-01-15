@@ -180,7 +180,8 @@ export interface AgentResponse {
 export async function chatStream(
   messages: ChatMessage[],
   grantedFolders: string[],
-  mainWindow: BrowserWindow | null
+  mainWindow: BrowserWindow | null,
+  selectedFile?: string
 ): Promise<AgentResponse> {
   if (!client) {
     return { message: '', error: 'Gemini not initialized.' }
@@ -188,10 +189,20 @@ export async function chatStream(
 
   const workingFolder = grantedFolders[0] || ''
   console.log('[CHAT] Working folder:', workingFolder)
+  console.log('[CHAT] Selected file:', selectedFile || 'none')
+
+  // Build selected file context
+  const selectedFileContext = selectedFile 
+    ? `
+
+CURRENTLY SELECTED FILE: ${selectedFile}
+When the user says "this file", "the file", "it", "selected file", or asks a question without specifying a filename, they are referring to: ${selectedFile}
+Use the full path above when calling tools on the selected file.`
+    : ''
 
   const systemInstruction = `You are Momentum, an AI-powered desktop file management assistant.
 
-WORKING FOLDER: ${workingFolder}
+WORKING FOLDER: ${workingFolder}${selectedFileContext}
 
 CAPABILITIES:
 - List, read, create, move, rename, copy, and delete files/folders
@@ -216,6 +227,7 @@ IMPORTANT RULES:
 3. When user mentions a file, construct the full path: "${workingFolder}\\<filename>"
 4. USE THE TOOLS - don't just describe what you would do, actually do it
 5. After reading a file, summarize or analyze its contents helpfully
+6. If a file is selected, use that file's path when the user refers to "this file" or similar
 
 EXAMPLE:
 User: "Read the report.pdf and summarize it"

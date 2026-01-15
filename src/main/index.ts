@@ -142,8 +142,8 @@ ipcMain.handle('agent:is-ready', () => {
 })
 
 // Streaming chat - sends events back to renderer
-ipcMain.handle('agent:chat', async (_, messages: gemini.ChatMessage[], grantedFolders: string[]) => {
-  return await gemini.chatStream(messages, grantedFolders, mainWindow)
+ipcMain.handle('agent:chat', async (_, messages: gemini.ChatMessage[], grantedFolders: string[], selectedFile?: string) => {
+  return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile)
 })
 
 ipcMain.handle('agent:test', async () => {
