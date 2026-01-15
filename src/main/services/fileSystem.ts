@@ -2,6 +2,7 @@ import * as fs from 'fs/promises'
 import * as fsSync from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
+import * as fileParsers from './fileParsers'
 
 // Types
 export interface FileEntry {
@@ -27,7 +28,7 @@ export interface OperationResult {
   data?: unknown
 }
 
-// Trash directory for safe deletions
+// Trash directory
 const getTrashDir = (): string => {
   const trashPath = path.join(app.getPath('userData'), 'trash')
   if (!fsSync.existsSync(trashPath)) {
@@ -36,7 +37,6 @@ const getTrashDir = (): string => {
   return trashPath
 }
 
-// Trash manifest to track original locations
 interface TrashEntry {
   originalPath: string
   trashPath: string
@@ -61,7 +61,7 @@ const saveTrashManifest = async (manifest: TrashEntry[]): Promise<void> => {
   await fs.writeFile(getTrashManifestPath(), JSON.stringify(manifest, null, 2))
 }
 
-// Helper: Get file extension
+// Get file extension
 export const getExtension = (filename: string): string => {
   const ext = path.extname(filename).toLowerCase()
   return ext.startsWith('.') ? ext.slice(1) : ext
@@ -79,7 +79,6 @@ export const readDirectory = async (
     const items = await fs.readdir(dirPath, { withFileTypes: true })
     
     for (const item of items) {
-      // Skip hidden files and system folders
       if (item.name.startsWith('.')) continue
       if (item.name === 'node_modules') continue
       if (item.name === '$RECYCLE.BIN') continue
@@ -109,7 +108,6 @@ export const readDirectory = async (
       }
     }
     
-    // Sort: directories first, then alphabetically
     entries.sort((a, b) => {
       if (a.isDirectory && !b.isDirectory) return -1
       if (!a.isDirectory && b.isDirectory) return 1
@@ -135,8 +133,17 @@ export const getFileInfo = async (filePath: string): Promise<FileInfo> => {
   }
 }
 
-// Read file content
+// Read file content (with parser support)
 export const readFile = async (filePath: string): Promise<string> => {
+  const ext = getExtension(filePath)
+  
+  // Use parser for supported document types
+  if (['pdf', 'docx', 'xlsx', 'xls', 'csv'].includes(ext)) {
+    const result = await fileParsers.parseFile(filePath)
+    return `[${result.type}]\n\n${result.content}`
+  }
+  
+  // Regular text files
   return await fs.readFile(filePath, 'utf-8')
 }
 
@@ -145,16 +152,29 @@ export const readFileBuffer = async (filePath: string): Promise<Buffer> => {
   return await fs.readFile(filePath)
 }
 
+// Parse file with type detection
+export const parseFile = async (filePath: string): Promise<{ content: string; type: string }> => {
+  return await fileParsers.parseFile(filePath)
+}
+
+// Check if file type is supported for parsing
+export const isFileSupported = (filePath: string): boolean => {
+  return fileParsers.isSupported(filePath)
+}
+
+// Get supported file types
+export const getSupportedFileTypes = (): string[] => {
+  return fileParsers.getSupportedTypes()
+}
+
 // Write file
 export const writeFile = async (
   filePath: string, 
   content: string
 ): Promise<OperationResult> => {
   try {
-    // Ensure directory exists
     const dir = path.dirname(filePath)
     await fs.mkdir(dir, { recursive: true })
-    
     await fs.writeFile(filePath, content, 'utf-8')
     return { success: true }
   } catch (err) {
@@ -175,17 +195,14 @@ export const createFolder = async (folderPath: string): Promise<OperationResult>
 // Delete file/folder (move to trash)
 export const deleteFile = async (filePath: string): Promise<OperationResult> => {
   try {
-    const stats = await fs.stat(filePath)
     const trashDir = getTrashDir()
     const timestamp = Date.now()
     const fileName = path.basename(filePath)
     const trashName = `${timestamp}-${fileName}`
     const trashPath = path.join(trashDir, trashName)
     
-    // Move to trash
     await fs.rename(filePath, trashPath)
     
-    // Update manifest
     const manifest = await loadTrashManifest()
     manifest.unshift({
       originalPath: filePath,
@@ -194,7 +211,6 @@ export const deleteFile = async (filePath: string): Promise<OperationResult> => 
       name: fileName
     })
     
-    // Keep only last 100 items in manifest
     await saveTrashManifest(manifest.slice(0, 100))
     
     return { success: true }
@@ -203,7 +219,7 @@ export const deleteFile = async (filePath: string): Promise<OperationResult> => 
   }
 }
 
-// Permanently delete (bypass trash)
+// Permanently delete
 export const permanentDelete = async (filePath: string): Promise<OperationResult> => {
   try {
     const stats = await fs.stat(filePath)
@@ -224,14 +240,12 @@ export const moveFile = async (
   destPath: string
 ): Promise<OperationResult> => {
   try {
-    // Ensure destination directory exists
     const destDir = path.dirname(destPath)
     await fs.mkdir(destDir, { recursive: true })
     
     await fs.rename(sourcePath, destPath)
     return { success: true }
   } catch (err) {
-    // If rename fails (cross-device), try copy + delete
     try {
       await fs.cp(sourcePath, destPath, { recursive: true })
       await fs.rm(sourcePath, { recursive: true })
@@ -251,12 +265,11 @@ export const renameFile = async (
     const dir = path.dirname(filePath)
     const newPath = path.join(dir, newName)
     
-    // Check if target already exists
     try {
       await fs.access(newPath)
       return { success: false, error: 'A file with this name already exists' }
     } catch {
-      // File doesn't exist, good to proceed
+      // Good - file doesn't exist
     }
     
     await fs.rename(filePath, newPath)
@@ -282,12 +295,11 @@ export const copyFile = async (
   }
 }
 
-// Get trash contents
+// Trash operations
 export const getTrashContents = async (): Promise<TrashEntry[]> => {
   return await loadTrashManifest()
 }
 
-// Restore from trash
 export const restoreFromTrash = async (trashPath: string): Promise<OperationResult> => {
   try {
     const manifest = await loadTrashManifest()
@@ -297,14 +309,11 @@ export const restoreFromTrash = async (trashPath: string): Promise<OperationResu
       return { success: false, error: 'Item not found in trash' }
     }
     
-    // Ensure original directory exists
     const originalDir = path.dirname(entry.originalPath)
     await fs.mkdir(originalDir, { recursive: true })
     
-    // Move back
     await fs.rename(trashPath, entry.originalPath)
     
-    // Update manifest
     const newManifest = manifest.filter(e => e.trashPath !== trashPath)
     await saveTrashManifest(newManifest)
     
@@ -314,7 +323,6 @@ export const restoreFromTrash = async (trashPath: string): Promise<OperationResu
   }
 }
 
-// Empty trash
 export const emptyTrash = async (): Promise<OperationResult> => {
   try {
     const trashDir = getTrashDir()

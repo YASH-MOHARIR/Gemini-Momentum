@@ -18,7 +18,7 @@ export function isInitialized(): boolean {
 const fileTools = [
   {
     name: 'list_directory',
-    description: 'List all files and folders in a directory. Returns array of file info.',
+    description: 'List all files and folders in a directory. Returns names, sizes, and types.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -29,7 +29,13 @@ const fileTools = [
   },
   {
     name: 'read_file',
-    description: 'Read and return the text contents of a file.',
+    description: `Read and return the contents of a file. Supports:
+- Documents: PDF, DOCX (extracts text)
+- Spreadsheets: XLSX, XLS, CSV (extracts data)
+- Code: JS, TS, PY, HTML, CSS, etc.
+- Data: JSON, XML, YAML
+- Text: TXT, MD, LOG
+Use this to analyze document contents, read data files, or view code.`,
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -63,7 +69,7 @@ const fileTools = [
   },
   {
     name: 'delete_file',
-    description: 'Delete a file or folder by moving it to trash.',
+    description: 'Delete a file or folder by moving it to trash (can be restored).',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -144,7 +150,7 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
       default:
         result = { error: `Unknown tool: ${name}` }
     }
-    console.log(`[TOOL RESULT] ${name}:`, JSON.stringify(result).substring(0, 200))
+    console.log(`[TOOL RESULT] ${name}:`, JSON.stringify(result).substring(0, 500))
     return result
   } catch (err) {
     console.error(`[TOOL ERROR] ${name}:`, err)
@@ -183,27 +189,37 @@ export async function chatStream(
   const workingFolder = grantedFolders[0] || ''
   console.log('[CHAT] Working folder:', workingFolder)
 
-  const systemInstruction = `You are Momentum, a file management assistant.
+  const systemInstruction = `You are Momentum, an AI-powered desktop file management assistant.
 
 WORKING FOLDER: ${workingFolder}
 
-YOUR TOOLS:
-- list_directory: List files in a folder
-- read_file: Read a file's contents  
+CAPABILITIES:
+- List, read, create, move, rename, copy, and delete files/folders
+- Read and analyze documents: PDF, DOCX, XLSX, CSV, JSON, and code files
+- Organize files by type, date, or custom criteria
+- Extract data from spreadsheets and documents
+- Create reports and summaries
+
+TOOLS:
+- list_directory: See what files are in a folder
+- read_file: Read file contents (supports PDF, DOCX, XLSX, CSV, JSON, code, text)
 - write_file: Create or overwrite a file
 - create_folder: Create a new folder
-- delete_file: Delete a file/folder
-- move_file: Move a file/folder
-- rename_file: Rename a file/folder
-- copy_file: Copy a file/folder
+- delete_file: Delete (moves to trash)
+- move_file: Move files/folders
+- rename_file: Rename files/folders
+- copy_file: Copy files/folders
 
-IMPORTANT: Always use FULL ABSOLUTE PATHS starting with "${workingFolder}"
+IMPORTANT RULES:
+1. ALWAYS use FULL ABSOLUTE PATHS starting with "${workingFolder}"
+2. Example: "${workingFolder}\\filename.txt" (Windows) or "${workingFolder}/filename.txt" (Mac/Linux)
+3. When user mentions a file, construct the full path: "${workingFolder}\\<filename>"
+4. USE THE TOOLS - don't just describe what you would do, actually do it
+5. After reading a file, summarize or analyze its contents helpfully
 
-Examples:
-- To create "test.txt" → use path: "${workingFolder}\\test.txt"
-- To list files → use path: "${workingFolder}"
-
-When the user asks you to do something with files, USE THE TOOLS. Don't just describe what you would do - actually call the function.`
+EXAMPLE:
+User: "Read the report.pdf and summarize it"
+You: Call read_file with path "${workingFolder}\\report.pdf", then provide a summary of the contents.`
 
   try {
     const model = client.getGenerativeModel({ 
@@ -222,33 +238,27 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
 
     console.log('[CHAT] Sending:', lastMessage)
     
-    // Use streaming
     const streamResult = await chatSession.sendMessageStream(lastMessage)
     const toolCalls: ToolCallResult[] = []
     let fullText = ''
 
-    // Process stream
     for await (const chunk of streamResult.stream) {
       const chunkText = chunk.text()
       if (chunkText) {
         fullText += chunkText
-        // Send chunk to renderer
         mainWindow?.webContents.send('agent:stream-chunk', chunkText)
       }
     }
 
-    // Get final response to check for function calls
     const response = await streamResult.response
     let functionCalls = response.functionCalls()
     
     console.log('[CHAT] Function calls found:', functionCalls?.length || 0)
     
-    // Handle function calls
     let loopCount = 0
     while (functionCalls && functionCalls.length > 0 && loopCount < 10) {
       loopCount++
       
-      // Notify renderer that we're executing tools
       mainWindow?.webContents.send('agent:tool-start')
 
       const functionResponses: Array<{ functionResponse: { name: string; response: object } }> = []
@@ -259,13 +269,11 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
         
         console.log(`[CHAT] Calling tool: ${toolName}`, toolArgs)
         
-        // Notify renderer of each tool call
         mainWindow?.webContents.send('agent:tool-call', { name: toolName, args: toolArgs })
         
         const result = await executeTool(toolName, toolArgs)
         toolCalls.push({ name: toolName, args: toolArgs, result })
         
-        // Notify renderer of tool result
         mainWindow?.webContents.send('agent:tool-result', { name: toolName, result })
         
         functionResponses.push({
@@ -276,10 +284,9 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
         })
       }
 
-      // Send results back and stream the response
       const followUpStream = await chatSession.sendMessageStream(functionResponses)
       
-      fullText = '' // Reset for follow-up response
+      fullText = ''
       for await (const chunk of followUpStream.stream) {
         const chunkText = chunk.text()
         if (chunkText) {
@@ -292,7 +299,6 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
       functionCalls = followUpResponse.functionCalls()
     }
 
-    // Signal stream complete
     mainWindow?.webContents.send('agent:stream-end')
 
     console.log('[CHAT] Response:', fullText.substring(0, 100))
@@ -312,7 +318,7 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
   }
 }
 
-// Keep non-streaming version for simple calls
+// Non-streaming version
 export async function chat(
   messages: ChatMessage[],
   grantedFolders: string[]
