@@ -15,6 +15,7 @@ import {
 import FileTree from './components/FileTree'
 import ProgressPanel from './components/ProgressPanel'
 import MetricsPanel from './components/MetricsPanel'
+import ReviewPanel from './components/ReviewPanel'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 
 interface TaskClassification {
@@ -167,7 +168,8 @@ function App(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [activeTab, setActiveTab] = useState<'progress' | 'metrics'>('progress')
+  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review'>('progress')
+  const [pendingCount, setPendingCount] = useState(0)
   const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(
     null
   )
@@ -199,6 +201,25 @@ function App(): JSX.Element {
     }
     checkAgent()
   }, [])
+
+  // Poll for pending actions count
+  useEffect(() => {
+    const checkPending = async () => {
+      try {
+        const count = await window.api.pending.getCount()
+        setPendingCount(count)
+        // Auto-switch to review tab if there are pending actions
+        if (count > 0 && activeTab !== 'review') {
+          setActiveTab('review')
+        }
+      } catch (err) {
+        console.error('Failed to check pending count:', err)
+      }
+    }
+    checkPending()
+    const interval = setInterval(checkPending, 2000)
+    return () => clearInterval(interval)
+  }, [activeTab])
 
   // Subscribe to streaming events
   useEffect(() => {
@@ -583,7 +604,7 @@ function App(): JSX.Element {
           <div className="flex border-b border-slate-700">
             <button
               onClick={() => setActiveTab('progress')}
-              className={`flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
+              className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
                 activeTab === 'progress'
                   ? 'text-slate-200 border-b-2 border-sky-500'
                   : 'text-slate-500 hover:text-slate-300'
@@ -592,19 +613,47 @@ function App(): JSX.Element {
               Progress
             </button>
             <button
+              onClick={() => setActiveTab('review')}
+              className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${
+                activeTab === 'review'
+                  ? 'text-slate-200 border-b-2 border-sky-500'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              Review
+              {pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('metrics')}
-              className={`flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
+              className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
                 activeTab === 'metrics'
                   ? 'text-slate-200 border-b-2 border-sky-500'
                   : 'text-slate-500 hover:text-slate-300'
               }`}
             >
-              Efficiency
+              Stats
             </button>
           </div>
 
           {/* Tab content */}
-          {activeTab === 'progress' ? <ProgressPanel /> : <MetricsPanel />}
+          {activeTab === 'progress' && <ProgressPanel />}
+          {activeTab === 'review' && (
+            <ReviewPanel
+              onComplete={async () => {
+                setPendingCount(0)
+                // Refresh folders after deletions
+                for (const folder of folders) {
+                  const newEntries = await window.api.fs.listDir(folder.path)
+                  useAppStore.getState().updateFolderEntries(folder.path, newEntries)
+                }
+              }}
+            />
+          )}
+          {activeTab === 'metrics' && <MetricsPanel />}
         </aside>
       </div>
     </div>

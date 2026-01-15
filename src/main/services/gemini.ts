@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { BrowserWindow } from 'electron'
 import * as fileSystem from './fileSystem'
+import * as spreadsheet from './spreadsheet'
+import * as fileOrganizer from './fileOrganizer'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -412,6 +414,108 @@ Returns the extracted information as text.`,
       },
       required: ['path', 'prompt']
     }
+  },
+  {
+    name: 'create_spreadsheet',
+    description: `Create an Excel spreadsheet (.xlsx) with data, headers, and optional formulas.
+Use this for:
+- Creating data reports
+- Exporting file lists
+- Building tables from extracted data
+- Any tabular data output
+The spreadsheet will include auto-filter, frozen headers, and SUM formulas for numeric columns.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'The full absolute path for the new .xlsx file'
+        },
+        sheet_name: {
+          type: 'STRING',
+          description: 'Name of the worksheet (default: Sheet1)'
+        },
+        columns: {
+          type: 'STRING',
+          description:
+            'JSON array of column definitions. Each column: {"header": "Display Name", "key": "dataKey", "width": 15}. Example: [{"header":"Name","key":"name","width":20},{"header":"Amount","key":"amount","width":12}]'
+        },
+        rows: {
+          type: 'STRING',
+          description:
+            'JSON array of row objects. Each row has keys matching column keys. Example: [{"name":"Item 1","amount":100},{"name":"Item 2","amount":200}]'
+        }
+      },
+      required: ['path', 'columns', 'rows']
+    }
+  },
+  {
+    name: 'create_expense_report',
+    description: `Create a formatted expense report spreadsheet from receipt/expense data.
+Automatically includes:
+- Columns: Date, Vendor, Category, Description, Amount
+- Auto-sorted by date
+- Category subtotals
+- Grand total with SUM formula
+- Auto-filter and frozen headers
+Use this after extracting data from receipts with analyze_image.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'The full absolute path for the expense report .xlsx file'
+        },
+        expenses: {
+          type: 'STRING',
+          description:
+            'JSON array of expense objects. Each expense: {"vendor": "Store Name", "date": "2024-01-15", "category": "Food", "description": "Lunch", "amount": 25.50}. Amount should be a number.'
+        }
+      },
+      required: ['path', 'expenses']
+    }
+  },
+  {
+    name: 'organize_files',
+    description: `Organize files in a folder by automatically categorizing them into subfolders.
+Categories: Images, Documents, Spreadsheets, Presentations, Code, Web, Data, Archives, Videos, Audio, Fonts, Design, Ebooks, Markdown, Executables, Other.
+Also detects junk/system files (.DS_Store, Thumbs.db, etc.) that can be safely deleted.
+
+Returns a plan showing what will be done. Use execute_organization to apply the plan.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'The full absolute path to the folder to organize'
+        },
+        include_subfolders: {
+          type: 'BOOLEAN',
+          description: 'Whether to scan subfolders too (default: false)'
+        }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'execute_organization',
+    description: `Execute a file organization plan created by organize_files.
+Moves files into category folders and optionally deletes junk files.
+Files are moved to trash (recoverable) not permanently deleted.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'The full absolute path to the folder to organize'
+        },
+        delete_junk: {
+          type: 'BOOLEAN',
+          description: 'Whether to delete detected junk files (default: false)'
+        }
+      },
+      required: ['path']
+    }
   }
 ]
 
@@ -486,6 +590,50 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
       case 'analyze_image':
         result = await analyzeImage(args.path, args.prompt)
         break
+      case 'create_spreadsheet':
+        try {
+          const columns = JSON.parse(args.columns)
+          const rows = JSON.parse(args.rows)
+          result = await spreadsheet.createSpreadsheet(args.path, {
+            columns,
+            rows,
+            sheetName: args.sheet_name || 'Sheet1'
+          })
+        } catch (parseError) {
+          result = { error: `Failed to parse spreadsheet data: ${parseError}` }
+        }
+        break
+      case 'create_expense_report':
+        try {
+          const expenses = JSON.parse(args.expenses)
+          result = await spreadsheet.createExpenseReport(args.path, expenses)
+        } catch (parseError) {
+          result = { error: `Failed to parse expense data: ${parseError}` }
+        }
+        break
+      case 'organize_files':
+        try {
+          const plan = await fileOrganizer.createOrganizationPlan(args.path, {
+            includeSubfolders: args.include_subfolders === 'true'
+          })
+          const summary = fileOrganizer.getPlanSummary(plan)
+          result = { success: true, plan, summary }
+        } catch (error) {
+          result = { error: `Failed to create organization plan: ${error}` }
+        }
+        break
+      case 'execute_organization':
+        try {
+          const plan = await fileOrganizer.createOrganizationPlan(args.path)
+          const orgResult = await fileOrganizer.executeOrganization(args.path, plan, {
+            deleteJunk: args.delete_junk === 'true'
+          })
+          const summary = fileOrganizer.getResultSummary(orgResult)
+          result = { ...orgResult, summary }
+        } catch (error) {
+          result = { error: `Failed to organize files: ${error}` }
+        }
+        break
       default:
         result = { error: `Unknown tool: ${name}` }
     }
@@ -540,13 +688,17 @@ CAPABILITIES:
 TOOLS AVAILABLE:
 - list_directory: See files in a folder
 - read_file: Read file contents (PDF, DOCX, XLSX, CSV, JSON, code, text)
-- write_file: Create or overwrite a file
+- write_file: Create or overwrite a text file
 - create_folder: Create a new folder
 - delete_file: Delete (moves to trash)
 - move_file: Move files/folders
 - rename_file: Rename files/folders
 - copy_file: Copy files/folders
-- analyze_image: Extract text/data from images
+- analyze_image: Extract text/data from images (receipts, screenshots, etc.)
+- create_spreadsheet: Create Excel files with custom columns and data
+- create_expense_report: Create formatted expense reports from receipt data
+- organize_files: Scan folder and create organization plan by file type
+- execute_organization: Execute the organization plan (move files to category folders)
 
 RULES:
 1. ALWAYS use FULL ABSOLUTE PATHS starting with "${workingFolder}"

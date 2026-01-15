@@ -71,6 +71,23 @@ interface AgentResponse {
   executorUsed?: 'flash-minimal' | 'flash-high' | 'pro-high'
 }
 
+interface PendingAction {
+  id: string
+  type: 'delete' | 'move' | 'rename' | 'overwrite'
+  sourcePath: string
+  destinationPath?: string
+  fileName: string
+  fileSize: number
+  reason?: string
+  createdAt: string
+}
+
+interface ActionResult {
+  id: string
+  success: boolean
+  error?: string
+}
+
 interface MomentumAPI {
   selectFolder: () => Promise<string | null>
   getVersion: () => Promise<string>
@@ -113,6 +130,20 @@ interface MomentumAPI {
     onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
     onRoutingStart: (callback: () => void) => () => void
     onRoutingComplete: (callback: (classification: TaskClassification) => void) => () => void
+  }
+
+  pending: {
+    getAll: () => Promise<PendingAction[]>
+    getCount: () => Promise<number>
+    getSize: () => Promise<number>
+    queueDeletion: (filePath: string, reason?: string) => Promise<PendingAction>
+    queueMultiple: (filePaths: string[], reason?: string) => Promise<PendingAction[]>
+    executeOne: (actionId: string) => Promise<ActionResult>
+    executeAll: () => Promise<ActionResult[]>
+    executeSelected: (actionIds: string[]) => Promise<ActionResult[]>
+    removeOne: (actionId: string) => Promise<boolean>
+    keepAll: () => Promise<number>
+    clear: () => Promise<void>
   }
 }
 

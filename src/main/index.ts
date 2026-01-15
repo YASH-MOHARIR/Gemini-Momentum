@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import * as fileSystem from './services/fileSystem'
 import * as gemini from './services/gemini'
+import * as pendingActions from './services/pendingActions'
 import { config } from 'dotenv'
 
 config()
@@ -159,6 +160,52 @@ ipcMain.handle('agent:get-metrics', () => {
 
 ipcMain.handle('agent:reset-metrics', () => {
   gemini.resetMetrics()
+})
+
+// ============ Pending Actions Handlers ============
+
+ipcMain.handle('pending:get-all', () => {
+  return pendingActions.getPendingActions()
+})
+
+ipcMain.handle('pending:get-count', () => {
+  return pendingActions.getPendingCount()
+})
+
+ipcMain.handle('pending:get-size', () => {
+  return pendingActions.getPendingSize()
+})
+
+ipcMain.handle('pending:queue-deletion', async (_, filePath: string, reason?: string) => {
+  return await pendingActions.queueDeletion(filePath, reason)
+})
+
+ipcMain.handle('pending:queue-multiple', async (_, filePaths: string[], reason?: string) => {
+  return await pendingActions.queueMultipleDeletions(filePaths, reason)
+})
+
+ipcMain.handle('pending:execute-one', async (_, actionId: string) => {
+  return await pendingActions.executeAction(actionId)
+})
+
+ipcMain.handle('pending:execute-all', async () => {
+  return await pendingActions.executeAllActions()
+})
+
+ipcMain.handle('pending:execute-selected', async (_, actionIds: string[]) => {
+  return await pendingActions.executeSelectedActions(actionIds)
+})
+
+ipcMain.handle('pending:remove-one', (_, actionId: string) => {
+  return pendingActions.removeAction(actionId)
+})
+
+ipcMain.handle('pending:keep-all', () => {
+  return pendingActions.keepAllFiles()
+})
+
+ipcMain.handle('pending:clear', () => {
+  pendingActions.clearPendingActions()
 })
 
 // ============ App Lifecycle ============

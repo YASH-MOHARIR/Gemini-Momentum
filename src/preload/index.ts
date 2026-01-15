@@ -71,6 +71,23 @@ export interface AgentResponse {
   executorUsed?: 'flash-minimal' | 'flash-high' | 'pro-high'
 }
 
+export interface PendingAction {
+  id: string
+  type: 'delete' | 'move' | 'rename' | 'overwrite'
+  sourcePath: string
+  destinationPath?: string
+  fileName: string
+  fileSize: number
+  reason?: string
+  createdAt: string
+}
+
+export interface ActionResult {
+  id: string
+  success: boolean
+  error?: string
+}
+
 const api = {
   // App
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
@@ -162,6 +179,26 @@ const api = {
       ipcRenderer.on('agent:routing-complete', handler)
       return () => ipcRenderer.removeListener('agent:routing-complete', handler)
     }
+  },
+
+  // Pending Actions (Review Panel)
+  pending: {
+    getAll: (): Promise<PendingAction[]> => ipcRenderer.invoke('pending:get-all'),
+    getCount: (): Promise<number> => ipcRenderer.invoke('pending:get-count'),
+    getSize: (): Promise<number> => ipcRenderer.invoke('pending:get-size'),
+    queueDeletion: (filePath: string, reason?: string): Promise<PendingAction> =>
+      ipcRenderer.invoke('pending:queue-deletion', filePath, reason),
+    queueMultiple: (filePaths: string[], reason?: string): Promise<PendingAction[]> =>
+      ipcRenderer.invoke('pending:queue-multiple', filePaths, reason),
+    executeOne: (actionId: string): Promise<ActionResult> =>
+      ipcRenderer.invoke('pending:execute-one', actionId),
+    executeAll: (): Promise<ActionResult[]> => ipcRenderer.invoke('pending:execute-all'),
+    executeSelected: (actionIds: string[]): Promise<ActionResult[]> =>
+      ipcRenderer.invoke('pending:execute-selected', actionIds),
+    removeOne: (actionId: string): Promise<boolean> =>
+      ipcRenderer.invoke('pending:remove-one', actionId),
+    keepAll: (): Promise<number> => ipcRenderer.invoke('pending:keep-all'),
+    clear: (): Promise<void> => ipcRenderer.invoke('pending:clear')
   }
 }
 
