@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Zap,
   Send,
@@ -55,6 +55,50 @@ function RoutingIndicator({
   )
 }
 
+// Simple markdown renderer for basic formatting
+function formatMessage(content: string): JSX.Element[] {
+  const lines = content.split('\n')
+  const elements: JSX.Element[] = []
+
+  lines.forEach((line, index) => {
+    let formattedLine: React.ReactNode = line
+
+    // Handle bold text **text**
+    if (line.includes('**')) {
+      const parts = line.split(/(\*\*[^*]+\*\*)/)
+      formattedLine = parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+        }
+        return part
+      })
+    }
+
+    // Handle bullet points
+    if (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*')) {
+      const bulletContent = line.replace(/^[\s]*[•\-\*][\s]*/, '')
+      elements.push(
+        <div key={index} className="flex gap-2 ml-2">
+          <span className="text-sky-400">•</span>
+          <span>{typeof formattedLine === 'string' ? bulletContent : formattedLine}</span>
+        </div>
+      )
+    } else if (line.trim() === '') {
+      // Empty line - add spacing
+      elements.push(<div key={index} className="h-2" />)
+    } else {
+      // Regular line
+      elements.push(
+        <div key={index}>
+          {formattedLine}
+        </div>
+      )
+    }
+  })
+
+  return elements
+}
+
 function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === 'user'
 
@@ -83,12 +127,16 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
               <span className="font-medium">Error</span>
             </div>
           )}
-          <p className="whitespace-pre-wrap">
-            {message.content}
-            {isStreaming && (
-              <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />
-            )}
-          </p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          ) : (
+            <div className="space-y-1">
+              {formatMessage(message.content)}
+              {isStreaming && (
+                <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tool calls summary */}
@@ -475,10 +523,10 @@ function App(): JSX.Element {
                         <RoutingIndicator classification={currentClassification} />
                         {streamingContent ? (
                           <div className="px-4 py-2 bg-slate-800 rounded-lg text-sm text-slate-100">
-                            <p className="whitespace-pre-wrap">
-                              {streamingContent}
+                            <div className="space-y-1">
+                              {formatMessage(streamingContent)}
                               <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />
-                            </p>
+                            </div>
                           </div>
                         ) : (
                           currentClassification && (

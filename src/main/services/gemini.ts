@@ -552,7 +552,15 @@ RULES:
 1. ALWAYS use FULL ABSOLUTE PATHS starting with "${workingFolder}"
 2. USE THE TOOLS - execute actions, don't just describe them
 3. After reading files, provide helpful analysis
-4. For images, use analyze_image with specific extraction prompts`
+4. For images, use analyze_image with specific extraction prompts
+
+RESPONSE FORMATTING:
+- Use clear paragraphs with blank lines between them
+- Use bullet points (•) for lists
+- Use **bold** for emphasis on important items
+- Use headings when presenting structured information
+- Keep responses well-organized and easy to read
+- When listing files, format them clearly with one per line`
 }
 
 // ============ ORCHESTRATED CHAT (2-LAYER) ============
