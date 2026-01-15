@@ -4,7 +4,7 @@ import FileTree from './components/FileTree'
 import ProgressPanel from './components/ProgressPanel'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 
-function ChatMessage({ message }: { message: Message }) {
+function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === 'user'
   
   return (
@@ -28,7 +28,10 @@ function ChatMessage({ message }: { message: Message }) {
               <span className="font-medium">Error</span>
             </div>
           )}
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap">
+            {message.content}
+            {isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />}
+          </p>
         </div>
         
         {/* Tool calls summary */}
@@ -43,9 +46,11 @@ function ChatMessage({ message }: { message: Message }) {
           </div>
         )}
         
-        <p className="text-xs text-slate-500 mt-1">
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </p>
+        {!isStreaming && (
+          <p className="text-xs text-slate-500 mt-1">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -55,6 +60,8 @@ function App(): JSX.Element {
   const [sidebarWidth] = useState(280)
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { 
@@ -84,10 +91,47 @@ function App(): JSX.Element {
     checkAgent()
   }, [])
 
+  // Subscribe to streaming events
+  useEffect(() => {
+    const unsubChunk = window.api.agent.onStreamChunk((chunk) => {
+      setStreamingContent(prev => prev + chunk)
+    })
+
+    const unsubEnd = window.api.agent.onStreamEnd(() => {
+      setIsStreaming(false)
+    })
+
+    const unsubToolCall = window.api.agent.onToolCall((data) => {
+      console.log('[STREAM] Tool call:', data.name)
+      const stepId = addTaskStep(data.name, data.args.path || data.args.source_path)
+      // Store stepId for later update
+      ;(window as any).__currentStepId = stepId
+    })
+
+    const unsubToolResult = window.api.agent.onToolResult((data) => {
+      console.log('[STREAM] Tool result:', data.name)
+      const stepId = (window as any).__currentStepId
+      if (stepId) {
+        const success = !(data.result as any)?.error
+        updateTaskStep(stepId, { 
+          status: success ? 'completed' : 'error',
+          result: data.result
+        })
+      }
+    })
+
+    return () => {
+      unsubChunk()
+      unsubEnd()
+      unsubToolCall()
+      unsubToolResult()
+    }
+  }, [addTaskStep, updateTaskStep])
+
   // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, streamingContent])
 
   // Handle folder selection
   const handleSelectFolder = async () => {
@@ -123,6 +167,8 @@ function App(): JSX.Element {
     
     const userMessage = inputValue.trim()
     setInputValue('')
+    setStreamingContent('')
+    setIsStreaming(true)
     
     addMessage({ role: 'user', content: userMessage })
     setProcessing(true)
@@ -135,17 +181,8 @@ function App(): JSX.Element {
       const grantedFolders = folders.map(f => f.path)
       const response = await window.api.agent.chat(chatHistory, grantedFolders)
       
-      // Track tool calls in progress panel
-      if (response.toolCalls) {
-        for (const tool of response.toolCalls) {
-          const stepId = addTaskStep(tool.name, tool.args.path || tool.args.source_path)
-          const success = !(tool.result as any)?.error
-          updateTaskStep(stepId, { 
-            status: success ? 'completed' : 'error',
-            result: tool.result
-          })
-        }
-      }
+      setIsStreaming(false)
+      setStreamingContent('')
       
       if (response.error) {
         addMessage({ role: 'assistant', content: response.error, isError: true })
@@ -167,6 +204,8 @@ function App(): JSX.Element {
         }
       }
     } catch (err) {
+      setIsStreaming(false)
+      setStreamingContent('')
       addMessage({ 
         role: 'assistant', 
         content: `Failed to get response: ${err}`,
@@ -265,7 +304,6 @@ function App(): JSX.Element {
             ))}
           </div>
           
-          {/* Selected file indicator */}
           {selectedFile && (
             <div className="p-2 border-t border-slate-700 bg-sky-900/20">
               <div className="text-xs text-sky-300 truncate" title={selectedFile.path}>
@@ -289,7 +327,7 @@ function App(): JSX.Element {
         <main className="flex-1 flex flex-col bg-slate-900">
           <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-3xl mx-auto space-y-4">
-              {messages.length === 0 ? (
+              {messages.length === 0 && !isStreaming ? (
                 <div className="text-center py-12">
                   <Zap className="w-12 h-12 text-sky-500 mx-auto mb-4" />
                   <h1 className="text-2xl font-bold text-slate-100 mb-2">
@@ -324,19 +362,37 @@ function App(): JSX.Element {
                   )}
                 </div>
               ) : (
-                messages.map((msg) => <ChatMessage key={msg.id} message={msg} />)
-              )}
-              
-              {isProcessing && (
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-                    <Bot className="w-4 h-4" />
-                  </div>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-                    <span className="w-2 h-2 bg-sky-500 rounded-full animate-pulse" />
-                    <span className="text-sm text-slate-400">Thinking...</span>
-                  </div>
-                </div>
+                <>
+                  {messages.map((msg) => (
+                    <ChatMessage key={msg.id} message={msg} />
+                  ))}
+                  
+                  {/* Streaming message */}
+                  {isStreaming && streamingContent && (
+                    <ChatMessage 
+                      message={{
+                        id: 'streaming',
+                        role: 'assistant',
+                        content: streamingContent,
+                        timestamp: new Date().toISOString()
+                      }} 
+                      isStreaming={true}
+                    />
+                  )}
+                  
+                  {/* Processing indicator when no content yet */}
+                  {isProcessing && !streamingContent && (
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                        <Bot className="w-4 h-4" />
+                      </div>
+                      <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
+                        <span className="w-2 h-2 bg-sky-500 rounded-full animate-pulse" />
+                        <span className="text-sm text-slate-400">Thinking...</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               
               <div ref={messagesEndRef} />

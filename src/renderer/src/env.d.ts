@@ -35,13 +35,15 @@ interface ChatMessage {
   content: string
 }
 
+interface ToolCallResult {
+  name: string
+  args: Record<string, string>
+  result: unknown
+}
+
 interface AgentResponse {
   message: string
-  toolCalls?: Array<{
-    name: string
-    args: Record<string, string>
-    result: unknown
-  }>
+  toolCalls?: ToolCallResult[]
   error?: string
 }
 
@@ -75,6 +77,12 @@ interface MomentumAPI {
     isReady: () => Promise<boolean>
     chat: (messages: ChatMessage[], grantedFolders: string[]) => Promise<AgentResponse>
     test: () => Promise<{ success: boolean; error?: string }>
+    
+    // Streaming events
+    onStreamChunk: (callback: (chunk: string) => void) => () => void
+    onStreamEnd: (callback: () => void) => () => void
+    onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => () => void
+    onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
   }
 }
 

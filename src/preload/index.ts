@@ -35,13 +35,15 @@ export interface ChatMessage {
   content: string
 }
 
+export interface ToolCallResult {
+  name: string
+  args: Record<string, string>
+  result: unknown
+}
+
 export interface AgentResponse {
   message: string
-  toolCalls?: Array<{
-    name: string
-    args: Record<string, string>
-    result: unknown
-  }>
+  toolCalls?: ToolCallResult[]
   error?: string
 }
 
@@ -103,6 +105,28 @@ const api = {
       ipcRenderer.invoke('agent:chat', messages, grantedFolders),
     test: (): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('agent:test'),
+    
+    // Streaming events
+    onStreamChunk: (callback: (chunk: string) => void) => {
+      const handler = (_: unknown, chunk: string) => callback(chunk)
+      ipcRenderer.on('agent:stream-chunk', handler)
+      return () => ipcRenderer.removeListener('agent:stream-chunk', handler)
+    },
+    onStreamEnd: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('agent:stream-end', handler)
+      return () => ipcRenderer.removeListener('agent:stream-end', handler)
+    },
+    onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => {
+      const handler = (_: unknown, data: { name: string; args: Record<string, string> }) => callback(data)
+      ipcRenderer.on('agent:tool-call', handler)
+      return () => ipcRenderer.removeListener('agent:tool-call', handler)
+    },
+    onToolResult: (callback: (data: { name: string; result: unknown }) => void) => {
+      const handler = (_: unknown, data: { name: string; result: unknown }) => callback(data)
+      ipcRenderer.on('agent:tool-result', handler)
+      return () => ipcRenderer.removeListener('agent:tool-result', handler)
+    },
   }
 }
 

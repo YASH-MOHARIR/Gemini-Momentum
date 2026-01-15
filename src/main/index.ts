@@ -6,7 +6,6 @@ import * as fileSystem from './services/fileSystem'
 import * as gemini from './services/gemini'
 import { config } from 'dotenv'
 
-// Load environment variables
 config()
 
 let mainWindow: BrowserWindow | null = null
@@ -142,8 +141,9 @@ ipcMain.handle('agent:is-ready', () => {
   return gemini.isInitialized()
 })
 
+// Streaming chat - sends events back to renderer
 ipcMain.handle('agent:chat', async (_, messages: gemini.ChatMessage[], grantedFolders: string[]) => {
-  return await gemini.chat(messages, grantedFolders)
+  return await gemini.chatStream(messages, grantedFolders, mainWindow)
 })
 
 ipcMain.handle('agent:test', async () => {
@@ -155,7 +155,6 @@ ipcMain.handle('agent:test', async () => {
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.momentum.app')
 
-  // Initialize Gemini with API key from environment
   const apiKey = process.env.GEMINI_API_KEY
   if (apiKey) {
     gemini.initializeGemini(apiKey)

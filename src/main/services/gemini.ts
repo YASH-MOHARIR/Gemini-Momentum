@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { BrowserWindow } from 'electron'
 import * as fileSystem from './fileSystem'
 
 const MODEL_ID = 'gemini-2.0-flash-exp'
@@ -13,7 +14,7 @@ export function isInitialized(): boolean {
   return client !== null
 }
 
-// Tool declarations using correct schema format
+// Tool declarations
 const fileTools = [
   {
     name: 'list_directory',
@@ -21,10 +22,7 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        path: { 
-          type: 'STRING', 
-          description: 'The full absolute path to the directory' 
-        }
+        path: { type: 'STRING', description: 'The full absolute path to the directory' }
       },
       required: ['path']
     }
@@ -35,10 +33,7 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        path: { 
-          type: 'STRING', 
-          description: 'The full absolute path to the file' 
-        }
+        path: { type: 'STRING', description: 'The full absolute path to the file' }
       },
       required: ['path']
     }
@@ -49,14 +44,8 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        path: { 
-          type: 'STRING', 
-          description: 'The full absolute path for the file' 
-        },
-        content: { 
-          type: 'STRING', 
-          description: 'The text content to write' 
-        }
+        path: { type: 'STRING', description: 'The full absolute path for the file' },
+        content: { type: 'STRING', description: 'The text content to write' }
       },
       required: ['path', 'content']
     }
@@ -67,10 +56,7 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        path: { 
-          type: 'STRING', 
-          description: 'The full absolute path for the new folder' 
-        }
+        path: { type: 'STRING', description: 'The full absolute path for the new folder' }
       },
       required: ['path']
     }
@@ -81,10 +67,7 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        path: { 
-          type: 'STRING', 
-          description: 'The full absolute path to delete' 
-        }
+        path: { type: 'STRING', description: 'The full absolute path to delete' }
       },
       required: ['path']
     }
@@ -95,14 +78,8 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        source_path: { 
-          type: 'STRING', 
-          description: 'The full absolute path of the source' 
-        },
-        destination_path: { 
-          type: 'STRING', 
-          description: 'The full absolute path of the destination' 
-        }
+        source_path: { type: 'STRING', description: 'The full absolute path of the source' },
+        destination_path: { type: 'STRING', description: 'The full absolute path of the destination' }
       },
       required: ['source_path', 'destination_path']
     }
@@ -113,14 +90,8 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        path: { 
-          type: 'STRING', 
-          description: 'The full absolute path to the file/folder' 
-        },
-        new_name: { 
-          type: 'STRING', 
-          description: 'The new name (filename only, not full path)' 
-        }
+        path: { type: 'STRING', description: 'The full absolute path to the file/folder' },
+        new_name: { type: 'STRING', description: 'The new name (filename only, not full path)' }
       },
       required: ['path', 'new_name']
     }
@@ -131,14 +102,8 @@ const fileTools = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        source_path: { 
-          type: 'STRING', 
-          description: 'The full absolute path of the source' 
-        },
-        destination_path: { 
-          type: 'STRING', 
-          description: 'The full absolute path for the copy' 
-        }
+        source_path: { type: 'STRING', description: 'The full absolute path of the source' },
+        destination_path: { type: 'STRING', description: 'The full absolute path for the copy' }
       },
       required: ['source_path', 'destination_path']
     }
@@ -193,20 +158,23 @@ export interface ChatMessage {
   content: string
 }
 
+export interface ToolCallResult {
+  name: string
+  args: Record<string, string>
+  result: unknown
+}
+
 export interface AgentResponse {
   message: string
-  toolCalls?: Array<{
-    name: string
-    args: Record<string, string>
-    result: unknown
-  }>
+  toolCalls?: ToolCallResult[]
   error?: string
 }
 
-// Main chat function
-export async function chat(
+// Streaming chat function
+export async function chatStream(
   messages: ChatMessage[],
-  grantedFolders: string[]
+  grantedFolders: string[],
+  mainWindow: BrowserWindow | null
 ): Promise<AgentResponse> {
   if (!client) {
     return { message: '', error: 'Gemini not initialized.' }
@@ -214,7 +182,6 @@ export async function chat(
 
   const workingFolder = grantedFolders[0] || ''
   console.log('[CHAT] Working folder:', workingFolder)
-  console.log('[CHAT] Messages:', messages.length)
 
   const systemInstruction = `You are Momentum, a file management assistant.
 
@@ -255,18 +222,34 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
 
     console.log('[CHAT] Sending:', lastMessage)
     
-    let response = await chatSession.sendMessage(lastMessage)
-    const toolCalls: AgentResponse['toolCalls'] = []
+    // Use streaming
+    const streamResult = await chatSession.sendMessageStream(lastMessage)
+    const toolCalls: ToolCallResult[] = []
+    let fullText = ''
 
-    // Check for function calls using the response method
-    let functionCalls = response.response.functionCalls()
+    // Process stream
+    for await (const chunk of streamResult.stream) {
+      const chunkText = chunk.text()
+      if (chunkText) {
+        fullText += chunkText
+        // Send chunk to renderer
+        mainWindow?.webContents.send('agent:stream-chunk', chunkText)
+      }
+    }
+
+    // Get final response to check for function calls
+    const response = await streamResult.response
+    let functionCalls = response.functionCalls()
     
     console.log('[CHAT] Function calls found:', functionCalls?.length || 0)
     
+    // Handle function calls
     let loopCount = 0
     while (functionCalls && functionCalls.length > 0 && loopCount < 10) {
       loopCount++
-      console.log(`[CHAT] Processing ${functionCalls.length} function calls (loop ${loopCount})`)
+      
+      // Notify renderer that we're executing tools
+      mainWindow?.webContents.send('agent:tool-start')
 
       const functionResponses: Array<{ functionResponse: { name: string; response: object } }> = []
 
@@ -276,8 +259,14 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
         
         console.log(`[CHAT] Calling tool: ${toolName}`, toolArgs)
         
+        // Notify renderer of each tool call
+        mainWindow?.webContents.send('agent:tool-call', { name: toolName, args: toolArgs })
+        
         const result = await executeTool(toolName, toolArgs)
         toolCalls.push({ name: toolName, args: toolArgs, result })
+        
+        // Notify renderer of tool result
+        mainWindow?.webContents.send('agent:tool-result', { name: toolName, result })
         
         functionResponses.push({
           functionResponse: {
@@ -287,28 +276,48 @@ When the user asks you to do something with files, USE THE TOOLS. Don't just des
         })
       }
 
-      // Send results back
-      response = await chatSession.sendMessage(functionResponses)
+      // Send results back and stream the response
+      const followUpStream = await chatSession.sendMessageStream(functionResponses)
       
-      // Check for more function calls
-      functionCalls = response.response.functionCalls()
+      fullText = '' // Reset for follow-up response
+      for await (const chunk of followUpStream.stream) {
+        const chunkText = chunk.text()
+        if (chunkText) {
+          fullText += chunkText
+          mainWindow?.webContents.send('agent:stream-chunk', chunkText)
+        }
+      }
+      
+      const followUpResponse = await followUpStream.response
+      functionCalls = followUpResponse.functionCalls()
     }
 
-    const text = response.response.text()
-    console.log('[CHAT] Response:', text?.substring(0, 100))
+    // Signal stream complete
+    mainWindow?.webContents.send('agent:stream-end')
+
+    console.log('[CHAT] Response:', fullText.substring(0, 100))
     
     return {
-      message: text || 'Done.',
+      message: fullText || 'Done.',
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined
     }
 
   } catch (error) {
     console.error('[CHAT] Error:', error)
+    mainWindow?.webContents.send('agent:stream-end')
     return { 
       message: '', 
       error: `Error: ${error instanceof Error ? error.message : String(error)}` 
     }
   }
+}
+
+// Keep non-streaming version for simple calls
+export async function chat(
+  messages: ChatMessage[],
+  grantedFolders: string[]
+): Promise<AgentResponse> {
+  return chatStream(messages, grantedFolders, null)
 }
 
 // Test connection
