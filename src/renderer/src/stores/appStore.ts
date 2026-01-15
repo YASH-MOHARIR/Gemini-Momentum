@@ -33,14 +33,15 @@ export interface Message {
 
 export interface TaskStep {
   id: string
-  description: string
+  description: string  // Tool name
   status: 'pending' | 'running' | 'completed' | 'error'
-  detail?: string
+  detail?: string      // File path or other context
+  result?: unknown
 }
 
 export interface Task {
   id: string
-  description: string
+  description: string  // User's original request
   status: 'running' | 'completed' | 'error'
   steps: TaskStep[]
   startedAt: string
@@ -77,9 +78,9 @@ interface AppState {
   
   // Actions - Tasks
   startTask: (description: string) => string
-  addTaskStep: (taskId: string, step: Omit<TaskStep, 'id'>) => void
-  updateTaskStep: (taskId: string, stepId: string, updates: Partial<TaskStep>) => void
-  completeTask: (taskId: string, status: 'completed' | 'error') => void
+  addTaskStep: (toolName: string, detail?: string) => string
+  updateTaskStep: (stepId: string, updates: Partial<TaskStep>) => void
+  completeTask: (status: 'completed' | 'error') => void
   
   // Actions - Agent
   setAgentReady: (ready: boolean) => void
@@ -161,31 +162,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     return taskId
   },
 
-  addTaskStep: (taskId, step) => {
+  addTaskStep: (toolName, detail) => {
     const { currentTask } = get()
-    if (!currentTask || currentTask.id !== taskId) return
+    if (!currentTask) return ''
     
-    const newStep: TaskStep = { ...step, id: generateId() }
+    const stepId = generateId()
+    const newStep: TaskStep = {
+      id: stepId,
+      description: toolName,
+      status: 'running',
+      detail
+    }
     set({
       currentTask: { ...currentTask, steps: [...currentTask.steps, newStep] }
     })
+    return stepId
   },
 
-  updateTaskStep: (taskId, stepId, updates) => {
+  updateTaskStep: (stepId, updates) => {
     const { currentTask } = get()
-    if (!currentTask || currentTask.id !== taskId) return
+    if (!currentTask) return
     
     set({
       currentTask: {
         ...currentTask,
-        steps: currentTask.steps.map(s => s.id === stepId ? { ...s, ...updates } : s)
+        steps: currentTask.steps.map(s => 
+          s.id === stepId ? { ...s, ...updates } : s
+        )
       }
     })
   },
 
-  completeTask: (taskId, status) => {
+  completeTask: (status) => {
     const { currentTask, taskHistory } = get()
-    if (!currentTask || currentTask.id !== taskId) return
+    if (!currentTask) return
     
     const completedTask: Task = {
       ...currentTask,
@@ -194,7 +204,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     set({
       currentTask: null,
-      taskHistory: [completedTask, ...taskHistory].slice(0, 50)
+      taskHistory: [completedTask, ...taskHistory].slice(0, 20)
     })
   },
   

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Zap, Send, FolderOpen, FolderPlus, X, Shield, User, Bot, Wrench, AlertCircle } from 'lucide-react'
 import FileTree from './components/FileTree'
+import ProgressPanel from './components/ProgressPanel'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 
 function ChatMessage({ message }: { message: Message }) {
@@ -30,16 +31,13 @@ function ChatMessage({ message }: { message: Message }) {
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
         
-        {/* Tool calls */}
+        {/* Tool calls summary */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 space-y-1">
             {message.toolCalls.map((tool, i) => (
               <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
                 <Wrench className="w-3 h-3" />
-                <span>{tool.name}</span>
-                <span className="text-slate-600">
-                  {Object.entries(tool.args).map(([k, v]) => `${k}: ${String(v).slice(0, 30)}...`).join(', ')}
-                </span>
+                <span className="text-slate-400">{tool.name}</span>
               </div>
             ))}
           </div>
@@ -70,10 +68,14 @@ function App(): JSX.Element {
     setSelectedFile,
     addMessage,
     setProcessing,
-    setAgentReady
+    setAgentReady,
+    startTask,
+    addTaskStep,
+    updateTaskStep,
+    completeTask
   } = useAppStore()
 
-  // Check if agent is ready on mount
+  // Check agent on mount
   useEffect(() => {
     const checkAgent = async () => {
       const ready = await window.api.agent.isReady()
@@ -82,7 +84,7 @@ function App(): JSX.Element {
     checkAgent()
   }, [])
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -111,47 +113,52 @@ function App(): JSX.Element {
     setIsLoading(false)
   }
 
-  // Handle file selection
   const handleFileSelect = (entry: FileEntry) => {
     setSelectedFile(entry)
   }
 
-  // Handle sending a message
+  // Handle sending message
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isProcessing) return
     
     const userMessage = inputValue.trim()
     setInputValue('')
     
-    // Add user message
     addMessage({ role: 'user', content: userMessage })
     setProcessing(true)
+    startTask(userMessage)
     
     try {
-      // Build chat history for API
       const chatHistory = [...messages, { role: 'user' as const, content: userMessage }]
         .map(m => ({ role: m.role, content: m.content }))
       
-      // Get granted folder paths
       const grantedFolders = folders.map(f => f.path)
-      
-      // Call the agent
       const response = await window.api.agent.chat(chatHistory, grantedFolders)
       
+      // Track tool calls in progress panel
+      if (response.toolCalls) {
+        for (const tool of response.toolCalls) {
+          const stepId = addTaskStep(tool.name, tool.args.path || tool.args.source_path)
+          const success = !(tool.result as any)?.error
+          updateTaskStep(stepId, { 
+            status: success ? 'completed' : 'error',
+            result: tool.result
+          })
+        }
+      }
+      
       if (response.error) {
-        addMessage({ 
-          role: 'assistant', 
-          content: response.error,
-          isError: true 
-        })
+        addMessage({ role: 'assistant', content: response.error, isError: true })
+        completeTask('error')
       } else {
         addMessage({ 
           role: 'assistant', 
           content: response.message,
           toolCalls: response.toolCalls
         })
+        completeTask('completed')
         
-        // Refresh folder contents if tools were used
+        // Refresh folders if tools were used
         if (response.toolCalls && response.toolCalls.length > 0) {
           for (const folder of folders) {
             const newEntries = await window.api.fs.listDir(folder.path)
@@ -165,12 +172,12 @@ function App(): JSX.Element {
         content: `Failed to get response: ${err}`,
         isError: true 
       })
+      completeTask('error')
     }
     
     setProcessing(false)
   }
 
-  // Handle Enter key
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -182,7 +189,7 @@ function App(): JSX.Element {
 
   return (
     <div className="h-screen flex flex-col bg-slate-900">
-      {/* Title Bar */}
+      {/* Header */}
       <header className="h-12 bg-slate-800 border-b border-slate-700 flex items-center px-4 drag-region">
         <div className="flex items-center gap-2 no-drag">
           <Zap className="w-5 h-5 text-sky-500" />
@@ -190,7 +197,6 @@ function App(): JSX.Element {
         </div>
         
         <div className="ml-auto flex items-center gap-3 no-drag">
-          {/* Agent status */}
           <div className={`flex items-center gap-1.5 text-xs ${isAgentReady ? 'text-emerald-400' : 'text-amber-400'}`}>
             <span className={`w-2 h-2 rounded-full ${isAgentReady ? 'bg-emerald-400' : 'bg-amber-400'}`} />
             {isAgentReady ? 'AI Ready' : 'No API Key'}
@@ -205,13 +211,10 @@ function App(): JSX.Element {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - File Tree */}
-        <aside 
-          className="bg-slate-800 border-r border-slate-700 flex flex-col"
-          style={{ width: sidebarWidth }}
-        >
+        {/* Sidebar */}
+        <aside className="bg-slate-800 border-r border-slate-700 flex flex-col" style={{ width: sidebarWidth }}>
           <div className="p-3 border-b border-slate-700 flex items-center justify-between">
             <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide">Files</h2>
             <button 
@@ -282,7 +285,7 @@ function App(): JSX.Element {
           )}
         </aside>
 
-        {/* Chat Panel */}
+        {/* Chat */}
         <main className="flex-1 flex flex-col bg-slate-900">
           <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-3xl mx-auto space-y-4">
@@ -340,7 +343,7 @@ function App(): JSX.Element {
             </div>
           </div>
           
-          {/* Input Area */}
+          {/* Input */}
           <div className="border-t border-slate-700 p-4">
             <div className="max-w-3xl mx-auto">
               <div className="bg-slate-800 rounded-lg border border-slate-700 flex items-center">
@@ -372,18 +375,7 @@ function App(): JSX.Element {
           <div className="p-3 border-b border-slate-700">
             <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide">Progress</h2>
           </div>
-          <div className="flex-1 overflow-y-auto p-3">
-            {isProcessing ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-slate-300">
-                  <span className="w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                  Processing request...
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">No active tasks</p>
-            )}
-          </div>
+          <ProgressPanel />
         </aside>
       </div>
     </div>
