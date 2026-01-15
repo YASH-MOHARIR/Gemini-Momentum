@@ -1,8 +1,32 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { BrowserWindow } from 'electron'
 import * as fileSystem from './fileSystem'
+import * as fs from 'fs/promises'
+import * as path from 'path'
 
 const MODEL_ID = 'gemini-2.0-flash-exp'
+
+// Supported image extensions
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif']
+
+function isImageFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase().slice(1)
+  return IMAGE_EXTENSIONS.includes(ext)
+}
+
+function getMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase().slice(1)
+  const mimeTypes: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    heic: 'image/heic',
+    heif: 'image/heif'
+  }
+  return mimeTypes[ext] || 'image/jpeg'
+}
 
 let client: GoogleGenerativeAI | null = null
 
@@ -113,8 +137,60 @@ Use this to analyze document contents, read data files, or view code.`,
       },
       required: ['source_path', 'destination_path']
     }
+  },
+  {
+    name: 'analyze_image',
+    description: `Analyze an image file using AI vision. Use this for:
+- Extracting text from receipts, invoices, business cards
+- Reading data from screenshots, photos of documents
+- Describing image contents
+- Extracting structured data (dates, amounts, names, etc.)
+Returns the extracted information as text.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: { type: 'STRING', description: 'The full absolute path to the image file (PNG, JPG, JPEG, GIF, WEBP)' },
+        prompt: { type: 'STRING', description: 'What to extract or analyze from the image. Be specific, e.g., "Extract vendor name, date, total amount, and itemized list" for receipts.' }
+      },
+      required: ['path', 'prompt']
+    }
   }
 ]
+
+// Analyze image with Gemini Vision
+async function analyzeImage(imagePath: string, prompt: string): Promise<string> {
+  if (!client) {
+    throw new Error('Gemini not initialized')
+  }
+
+  if (!isImageFile(imagePath)) {
+    throw new Error(`Not a supported image file. Supported: ${IMAGE_EXTENSIONS.join(', ')}`)
+  }
+
+  console.log(`[VISION] Analyzing image: ${imagePath}`)
+  console.log(`[VISION] Prompt: ${prompt}`)
+
+  const imageBuffer = await fs.readFile(imagePath)
+  const base64Image = imageBuffer.toString('base64')
+  const mimeType = getMimeType(imagePath)
+
+  const model = client.getGenerativeModel({ model: MODEL_ID })
+
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType,
+        data: base64Image
+      }
+    },
+    { text: prompt }
+  ])
+
+  const response = result.response.text()
+  console.log(`[VISION] Result: ${response.substring(0, 200)}...`)
+  
+  return response
+}
 
 // Execute tool
 async function executeTool(name: string, args: Record<string, string>): Promise<unknown> {
@@ -146,6 +222,9 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
         break
       case 'copy_file':
         result = await fileSystem.copyFile(args.source_path, args.destination_path)
+        break
+      case 'analyze_image':
+        result = await analyzeImage(args.path, args.prompt)
         break
       default:
         result = { error: `Unknown tool: ${name}` }
@@ -191,7 +270,6 @@ export async function chatStream(
   console.log('[CHAT] Working folder:', workingFolder)
   console.log('[CHAT] Selected file:', selectedFile || 'none')
 
-  // Build selected file context
   const selectedFileContext = selectedFile 
     ? `
 
@@ -207,6 +285,7 @@ WORKING FOLDER: ${workingFolder}${selectedFileContext}
 CAPABILITIES:
 - List, read, create, move, rename, copy, and delete files/folders
 - Read and analyze documents: PDF, DOCX, XLSX, CSV, JSON, and code files
+- Analyze images: Extract text from receipts, invoices, screenshots, photos
 - Organize files by type, date, or custom criteria
 - Extract data from spreadsheets and documents
 - Create reports and summaries
@@ -220,6 +299,7 @@ TOOLS:
 - move_file: Move files/folders
 - rename_file: Rename files/folders
 - copy_file: Copy files/folders
+- analyze_image: Extract text/data from images (receipts, screenshots, photos)
 
 IMPORTANT RULES:
 1. ALWAYS use FULL ABSOLUTE PATHS starting with "${workingFolder}"
@@ -228,10 +308,15 @@ IMPORTANT RULES:
 4. USE THE TOOLS - don't just describe what you would do, actually do it
 5. After reading a file, summarize or analyze its contents helpfully
 6. If a file is selected, use that file's path when the user refers to "this file" or similar
+7. For images, use analyze_image with a detailed prompt about what to extract
 
 EXAMPLE:
 User: "Read the report.pdf and summarize it"
-You: Call read_file with path "${workingFolder}\\report.pdf", then provide a summary of the contents.`
+You: Call read_file with path "${workingFolder}\\report.pdf", then provide a summary of the contents.
+
+EXAMPLE (Image):
+User: "Extract the data from this receipt"
+You: Call analyze_image with the image path and prompt "Extract vendor name, date, total amount, tax, and itemized list from this receipt"`
 
   try {
     const model = client.getGenerativeModel({ 
