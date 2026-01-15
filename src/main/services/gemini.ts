@@ -516,6 +516,61 @@ Files are moved to trash (recoverable) not permanently deleted.`,
       },
       required: ['path']
     }
+  },
+  {
+    name: 'process_receipts',
+    description: `Process multiple receipt images in a folder and create an expense report.
+Automatically:
+1. Finds all image files in the folder (jpg, png, etc.)
+2. Analyzes each image with AI Vision to extract: vendor, date, amount, category
+3. Creates a formatted Excel expense report with all extracted data
+4. Includes totals and category breakdowns
+
+Use this for batch processing receipts, invoices, or any expense-related images.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        folder_path: {
+          type: 'STRING',
+          description: 'The full absolute path to the folder containing receipt images'
+        },
+        output_path: {
+          type: 'STRING',
+          description: 'The full absolute path for the output expense report .xlsx file'
+        },
+        category_hint: {
+          type: 'STRING',
+          description: 'Optional hint for categorization (e.g., "business travel", "office supplies")'
+        }
+      },
+      required: ['folder_path', 'output_path']
+    }
+  },
+  {
+    name: 'smart_rename',
+    description: `Intelligently rename a file based on its content.
+For images: Uses Vision to detect content and generate descriptive name
+For documents: Extracts title/subject from content
+For receipts: Extracts vendor, date, amount for naming
+
+Example results:
+- Receipt image → "2026-01-15_Starbucks_$8.50.jpg"
+- Screenshot → "VSCode_Python_Debug.png"  
+- Document → "Q4_Sales_Report.pdf"`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'The full absolute path to the file to rename'
+        },
+        naming_style: {
+          type: 'STRING',
+          description: 'Optional style: "receipt" (date_vendor_amount), "descriptive" (content-based), "dated" (date_originalname). Default: auto-detect'
+        }
+      },
+      required: ['path']
+    }
   }
 ]
 
@@ -553,6 +608,325 @@ async function analyzeImage(imagePath: string, prompt: string): Promise<string> 
   console.log(`[VISION] Result: ${response.substring(0, 200)}...`)
 
   return response
+}
+
+// ============ BATCH RECEIPT PROCESSING ============
+
+interface ReceiptData {
+  vendor: string
+  date: string
+  amount: number
+  category: string
+  description: string
+  filePath: string
+}
+
+async function extractReceiptData(imagePath: string, categoryHint?: string): Promise<ReceiptData | null> {
+  if (!client) {
+    throw new Error('Gemini not initialized')
+  }
+
+  try {
+    const imageBuffer = await fs.readFile(imagePath)
+    const base64Image = imageBuffer.toString('base64')
+    const mimeType = getMimeType(imagePath)
+
+    const model = client.getGenerativeModel({ 
+      model: MODELS.FLASH,
+      generationConfig: {
+        temperature: 0.1
+      }
+    })
+
+    const categoryContext = categoryHint ? `\nCategory hint: ${categoryHint}` : ''
+
+    const prompt = `Analyze this receipt/invoice image and extract the following information.
+Return ONLY a valid JSON object with these exact fields:
+{
+  "vendor": "store or company name",
+  "date": "YYYY-MM-DD format",
+  "amount": numeric_total_amount,
+  "category": "Food" | "Transport" | "Office" | "Entertainment" | "Utilities" | "Shopping" | "Travel" | "Other",
+  "description": "brief description of purchase"
+}
+
+If you cannot determine a field, use reasonable defaults:
+- vendor: "Unknown"
+- date: today's date
+- amount: 0
+- category: "Other"
+- description: "Receipt"
+${categoryContext}
+
+Return ONLY the JSON object, no other text.`
+
+    const result = await model.generateContent([
+      { inlineData: { mimeType, data: base64Image } },
+      { text: prompt }
+    ])
+
+    const responseText = result.response.text()
+    console.log(`[RECEIPT] Raw response for ${path.basename(imagePath)}: ${responseText.substring(0, 200)}`)
+
+    // Parse JSON from response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      console.error(`[RECEIPT] No JSON found in response for ${imagePath}`)
+      return null
+    }
+
+    const data = JSON.parse(jsonMatch[0])
+    
+    return {
+      vendor: data.vendor || 'Unknown',
+      date: data.date || new Date().toISOString().split('T')[0],
+      amount: typeof data.amount === 'number' ? data.amount : parseFloat(data.amount) || 0,
+      category: data.category || 'Other',
+      description: data.description || 'Receipt',
+      filePath: imagePath
+    }
+  } catch (error) {
+    console.error(`[RECEIPT] Failed to extract data from ${imagePath}:`, error)
+    return null
+  }
+}
+
+async function processReceiptsBatch(
+  folderPath: string,
+  outputPath: string,
+  categoryHint?: string
+): Promise<{ success: boolean; receiptsProcessed: number; outputPath?: string; summary?: string; error?: string }> {
+  console.log(`[RECEIPTS] Processing folder: ${folderPath}`)
+
+  try {
+    // Find all image files in folder
+    const entries = await fs.readdir(folderPath, { withFileTypes: true })
+    const imageFiles = entries
+      .filter(e => !e.isDirectory && isImageFile(e.name))
+      .map(e => path.join(folderPath, e.name))
+
+    if (imageFiles.length === 0) {
+      return { success: false, receiptsProcessed: 0, error: 'No image files found in folder' }
+    }
+
+    console.log(`[RECEIPTS] Found ${imageFiles.length} images to process`)
+
+    // Process each image
+    const receipts: ReceiptData[] = []
+    for (const imagePath of imageFiles) {
+      console.log(`[RECEIPTS] Processing: ${path.basename(imagePath)}`)
+      const data = await extractReceiptData(imagePath, categoryHint)
+      if (data) {
+        receipts.push(data)
+      }
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+
+    if (receipts.length === 0) {
+      return { success: false, receiptsProcessed: 0, error: 'Could not extract data from any images' }
+    }
+
+    // Create expense report
+    const expenses = receipts.map(r => ({
+      vendor: r.vendor,
+      date: r.date,
+      category: r.category,
+      description: r.description,
+      amount: r.amount
+    }))
+
+    const reportResult = await spreadsheet.createExpenseReport(outputPath, expenses)
+
+    if (!reportResult.success) {
+      return { success: false, receiptsProcessed: receipts.length, error: reportResult.error }
+    }
+
+    // Generate summary
+    const totalAmount = receipts.reduce((sum, r) => sum + r.amount, 0)
+    const categoryTotals: Record<string, number> = {}
+    receipts.forEach(r => {
+      categoryTotals[r.category] = (categoryTotals[r.category] || 0) + r.amount
+    })
+
+    const summaryLines = [
+      `**Expense Report Created**`,
+      ``,
+      `• Receipts processed: ${receipts.length}`,
+      `• Total amount: ${totalAmount.toFixed(2)}`,
+      ``,
+      `**By Category:**`
+    ]
+    for (const [cat, amount] of Object.entries(categoryTotals)) {
+      summaryLines.push(`• ${cat}: ${amount.toFixed(2)}`)
+    }
+    summaryLines.push(``, `Report saved to: ${outputPath}`)
+
+    return {
+      success: true,
+      receiptsProcessed: receipts.length,
+      outputPath,
+      summary: summaryLines.join('\n')
+    }
+
+  } catch (error) {
+    console.error('[RECEIPTS] Error:', error)
+    return { success: false, receiptsProcessed: 0, error: String(error) }
+  }
+}
+
+// ============ SMART RENAME ============
+
+async function smartRenameFile(
+  filePath: string,
+  namingStyle?: string
+): Promise<{ success: boolean; oldName: string; newName: string; newPath?: string; error?: string }> {
+  const oldName = path.basename(filePath)
+  const ext = path.extname(filePath).toLowerCase()
+  const dir = path.dirname(filePath)
+
+  console.log(`[RENAME] Smart renaming: ${oldName}`)
+
+  try {
+    let newBaseName: string
+
+    if (isImageFile(filePath)) {
+      // Use Vision to analyze image
+      newBaseName = await generateImageName(filePath, namingStyle)
+    } else {
+      // For non-images, try to extract from content
+      newBaseName = await generateDocumentName(filePath, namingStyle)
+    }
+
+    // Clean the name
+    newBaseName = newBaseName
+      .replace(/[<>:"/\\|?*]/g, '_')  // Remove invalid chars
+      .replace(/\s+/g, '_')            // Replace spaces with underscores
+      .replace(/_+/g, '_')             // Remove duplicate underscores
+      .replace(/^_|_$/g, '')           // Trim underscores
+      .substring(0, 100)               // Limit length
+
+    const newName = `${newBaseName}${ext}`
+    const newPath = path.join(dir, newName)
+
+    // Check if new name is same as old
+    if (newName === oldName) {
+      return { success: true, oldName, newName, newPath: filePath }
+    }
+
+    // Check if destination exists
+    try {
+      await fs.access(newPath)
+      // File exists, add timestamp
+      const timestampedName = `${newBaseName}_${Date.now()}${ext}`
+      const timestampedPath = path.join(dir, timestampedName)
+      await fs.rename(filePath, timestampedPath)
+      return { success: true, oldName, newName: timestampedName, newPath: timestampedPath }
+    } catch {
+      // Destination doesn't exist, safe to rename
+      await fs.rename(filePath, newPath)
+      return { success: true, oldName, newName, newPath }
+    }
+
+  } catch (error) {
+    console.error('[RENAME] Error:', error)
+    return { success: false, oldName, newName: oldName, error: String(error) }
+  }
+}
+
+async function generateImageName(imagePath: string, style?: string): Promise<string> {
+  if (!client) {
+    throw new Error('Gemini not initialized')
+  }
+
+  const imageBuffer = await fs.readFile(imagePath)
+  const base64Image = imageBuffer.toString('base64')
+  const mimeType = getMimeType(imagePath)
+
+  const model = client.getGenerativeModel({ 
+    model: MODELS.FLASH,
+    generationConfig: { temperature: 0.1 }
+  })
+
+  let prompt: string
+
+  if (style === 'receipt') {
+    prompt = `This is a receipt image. Generate a filename in this format: YYYY-MM-DD_VendorName_$Amount
+Example: 2026-01-15_Starbucks_$8.50
+Return ONLY the filename, no extension, no other text.`
+  } else if (style === 'dated') {
+    prompt = `Generate a filename for this image starting with today's date.
+Format: YYYY-MM-DD_BriefDescription
+Return ONLY the filename, no extension, no other text.`
+  } else {
+    // Auto-detect or descriptive
+    prompt = `Generate a short, descriptive filename for this image.
+- If it's a receipt: use format YYYY-MM-DD_Vendor_$Amount
+- If it's a screenshot: use format AppName_Description
+- If it's a photo: use format Date_Subject or just Subject
+- Keep it under 50 characters
+- Use underscores instead of spaces
+Return ONLY the filename, no extension, no explanation.`
+  }
+
+  const result = await model.generateContent([
+    { inlineData: { mimeType, data: base64Image } },
+    { text: prompt }
+  ])
+
+  const suggestedName = result.response.text().trim()
+  console.log(`[RENAME] Vision suggested: ${suggestedName}`)
+
+  return suggestedName
+}
+
+async function generateDocumentName(filePath: string, style?: string): Promise<string> {
+  try {
+    // Read file content
+    const content = await fileSystem.readFile(filePath)
+    
+    if (!content || content.length < 10) {
+      // Fall back to date-based naming
+      const date = new Date().toISOString().split('T')[0]
+      const originalBase = path.basename(filePath, path.extname(filePath))
+      return `${date}_${originalBase}`
+    }
+
+    if (!client) {
+      throw new Error('Gemini not initialized')
+    }
+
+    const model = client.getGenerativeModel({ 
+      model: MODELS.FLASH,
+      generationConfig: { temperature: 0.1 }
+    })
+
+    const contentPreview = content.substring(0, 2000)
+
+    const prompt = `Based on this document content, generate a short descriptive filename.
+- Keep it under 50 characters
+- Use underscores instead of spaces
+- No extension needed
+- Make it descriptive of the document's purpose/content
+
+Content preview:
+${contentPreview}
+
+Return ONLY the filename, nothing else.`
+
+    const result = await model.generateContent(prompt)
+    const suggestedName = result.response.text().trim()
+    
+    console.log(`[RENAME] Document name suggested: ${suggestedName}`)
+    return suggestedName
+
+  } catch (error) {
+    console.error('[RENAME] Failed to generate document name:', error)
+    // Fall back to date-based naming
+    const date = new Date().toISOString().split('T')[0]
+    const originalBase = path.basename(filePath, path.extname(filePath))
+    return `${date}_${originalBase}`
+  }
 }
 
 // ============ TOOL EXECUTOR ============
@@ -632,6 +1006,24 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
           result = { ...orgResult, summary }
         } catch (error) {
           result = { error: `Failed to organize files: ${error}` }
+        }
+        break
+      case 'process_receipts':
+        try {
+          result = await processReceiptsBatch(
+            args.folder_path,
+            args.output_path,
+            args.category_hint
+          )
+        } catch (error) {
+          result = { error: `Failed to process receipts: ${error}` }
+        }
+        break
+      case 'smart_rename':
+        try {
+          result = await smartRenameFile(args.path, args.naming_style)
+        } catch (error) {
+          result = { error: `Failed to rename file: ${error}` }
         }
         break
       default:
