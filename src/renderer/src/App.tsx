@@ -16,6 +16,7 @@ import FileTree from './components/FileTree'
 import ProgressPanel from './components/ProgressPanel'
 import MetricsPanel from './components/MetricsPanel'
 import ReviewPanel from './components/ReviewPanel'
+import GoogleSignIn from './components/GoogleSignIn'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 
 interface TaskClassification {
@@ -24,11 +25,7 @@ interface TaskClassification {
   complexityScore: number
 }
 
-function RoutingIndicator({
-  classification
-}: {
-  classification: TaskClassification | null
-}) {
+function RoutingIndicator({ classification }: { classification: TaskClassification | null }) {
   if (!classification) {
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded text-xs text-slate-400">
@@ -56,7 +53,6 @@ function RoutingIndicator({
   )
 }
 
-// Simple markdown renderer for basic formatting
 function formatMessage(content: string): JSX.Element[] {
   const lines = content.split('\n')
   const elements: JSX.Element[] = []
@@ -64,7 +60,6 @@ function formatMessage(content: string): JSX.Element[] {
   lines.forEach((line, index) => {
     let formattedLine: React.ReactNode = line
 
-    // Handle bold text **text**
     if (line.includes('**')) {
       const parts = line.split(/(\*\*[^*]+\*\*)/)
       formattedLine = parts.map((part, i) => {
@@ -75,7 +70,6 @@ function formatMessage(content: string): JSX.Element[] {
       })
     }
 
-    // Handle bullet points
     if (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*')) {
       const bulletContent = line.replace(/^[\s]*[•\-\*][\s]*/, '')
       elements.push(
@@ -85,15 +79,9 @@ function formatMessage(content: string): JSX.Element[] {
         </div>
       )
     } else if (line.trim() === '') {
-      // Empty line - add spacing
       elements.push(<div key={index} className="h-2" />)
     } else {
-      // Regular line
-      elements.push(
-        <div key={index}>
-          {formattedLine}
-        </div>
-      )
+      elements.push(<div key={index}>{formattedLine}</div>)
     }
   })
 
@@ -105,23 +93,12 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div
-        className={`
-        w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-        ${isUser ? 'bg-sky-600' : 'bg-slate-700'}
-      `}
-      >
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-sky-600' : 'bg-slate-700'}`}>
         {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
       </div>
 
       <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
-        <div
-          className={`
-          inline-block px-4 py-2 rounded-lg text-sm
-          ${isUser ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-100'}
-          ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}
-        `}
-        >
+        <div className={`inline-block px-4 py-2 rounded-lg text-sm ${isUser ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-100'} ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}`}>
           {message.isError && (
             <div className="flex items-center gap-2 mb-1 text-red-400">
               <AlertCircle className="w-4 h-4" />
@@ -133,14 +110,11 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
           ) : (
             <div className="space-y-1">
               {formatMessage(message.content)}
-              {isStreaming && (
-                <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />
-              )}
+              {isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />}
             </div>
           )}
         </div>
 
-        {/* Tool calls summary */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 space-y-1">
             {message.toolCalls.map((tool, i) => (
@@ -170,9 +144,7 @@ function App(): JSX.Element {
   const [isStreaming, setIsStreaming] = useState(false)
   const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review'>('progress')
   const [pendingCount, setPendingCount] = useState(0)
-  const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(
-    null
-  )
+  const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -193,7 +165,6 @@ function App(): JSX.Element {
     completeTask
   } = useAppStore()
 
-  // Check agent on mount
   useEffect(() => {
     const checkAgent = async () => {
       const ready = await window.api.agent.isReady()
@@ -202,13 +173,11 @@ function App(): JSX.Element {
     checkAgent()
   }, [])
 
-  // Poll for pending actions count
   useEffect(() => {
     const checkPending = async () => {
       try {
         const count = await window.api.pending.getCount()
         setPendingCount(count)
-        // Auto-switch to review tab if there are pending actions
         if (count > 0 && activeTab !== 'review') {
           setActiveTab('review')
         }
@@ -221,7 +190,30 @@ function App(): JSX.Element {
     return () => clearInterval(interval)
   }, [activeTab])
 
-  // Subscribe to streaming events
+  useEffect(() => {
+    const unsubNewAction = window.api.pending.onNewAction((action) => {
+      console.log('[UI] New pending action:', action.fileName)
+      setPendingCount((prev) => prev + 1)
+      setActiveTab('review')
+    })
+    return () => unsubNewAction()
+  }, [])
+
+  useEffect(() => {
+    const unsubFsChanged = window.api.fs.onChanged(async () => {
+      console.log('[UI] File system changed, refreshing folders...')
+      for (const folder of folders) {
+        try {
+          const newEntries = await window.api.fs.listDir(folder.path)
+          useAppStore.getState().updateFolderEntries(folder.path, newEntries)
+        } catch (err) {
+          console.error(`Failed to refresh folder ${folder.path}:`, err)
+        }
+      }
+    })
+    return () => unsubFsChanged()
+  }, [folders])
+
   useEffect(() => {
     const unsubChunk = window.api.agent.onStreamChunk((chunk) => {
       setStreamingContent((prev) => prev + chunk)
@@ -242,10 +234,7 @@ function App(): JSX.Element {
       const stepId = (window as unknown as { __currentStepId: string }).__currentStepId
       if (stepId) {
         const success = !(data.result as { error?: string })?.error
-        updateTaskStep(stepId, {
-          status: success ? 'completed' : 'error',
-          result: data.result
-        })
+        updateTaskStep(stepId, { status: success ? 'completed' : 'error', result: data.result })
       }
     })
 
@@ -273,29 +262,20 @@ function App(): JSX.Element {
     }
   }, [addTaskStep, updateTaskStep])
 
-  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  // Handle folder selection
   const handleSelectFolder = async () => {
     const folderPath = await window.api.selectFolder()
     if (!folderPath) return
-
     if (folders.some((f) => f.path === folderPath)) return
 
     setIsLoading(true)
     try {
       const entries = await window.api.fs.listDir(folderPath)
       const folderName = folderPath.split(/[/\\]/).pop() || folderPath
-
-      addFolder({
-        path: folderPath,
-        name: folderName,
-        entries,
-        grantedAt: new Date().toISOString()
-      })
+      addFolder({ path: folderPath, name: folderName, entries, grantedAt: new Date().toISOString() })
     } catch (err) {
       console.error('Failed to load folder:', err)
     }
@@ -306,7 +286,6 @@ function App(): JSX.Element {
     setSelectedFile(entry)
   }
 
-  // Handle sending message
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isProcessing) return
 
@@ -321,17 +300,12 @@ function App(): JSX.Element {
     startTask(userMessage)
 
     try {
-      const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map(
-        (m) => ({ role: m.role, content: m.content })
-      )
-
+      const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map((m) => ({
+        role: m.role,
+        content: m.content
+      }))
       const grantedFolders = folders.map((f) => f.path)
-
-      const response = await window.api.agent.chat(
-        chatHistory,
-        grantedFolders,
-        selectedFile?.path
-      )
+      const response = await window.api.agent.chat(chatHistory, grantedFolders, selectedFile?.path)
 
       setIsStreaming(false)
       setStreamingContent('')
@@ -340,29 +314,13 @@ function App(): JSX.Element {
         addMessage({ role: 'assistant', content: response.error, isError: true })
         completeTask('error')
       } else {
-        addMessage({
-          role: 'assistant',
-          content: response.message,
-          toolCalls: response.toolCalls
-        })
+        addMessage({ role: 'assistant', content: response.message, toolCalls: response.toolCalls })
         completeTask('completed')
-
-        // Refresh folders if tools were used
-        if (response.toolCalls && response.toolCalls.length > 0) {
-          for (const folder of folders) {
-            const newEntries = await window.api.fs.listDir(folder.path)
-            useAppStore.getState().updateFolderEntries(folder.path, newEntries)
-          }
-        }
       }
     } catch (err) {
       setIsStreaming(false)
       setStreamingContent('')
-      addMessage({
-        role: 'assistant',
-        content: `Failed to get response: ${err}`,
-        isError: true
-      })
+      addMessage({ role: 'assistant', content: `Failed to get response: ${err}`, isError: true })
       completeTask('error')
     }
 
@@ -387,22 +345,17 @@ function App(): JSX.Element {
           <span className="font-semibold text-slate-100">Momentum</span>
         </div>
 
-        <div className="ml-auto flex items-center gap-3 no-drag">
-          <div
-            className={`flex items-center gap-1.5 text-xs ${isAgentReady ? 'text-emerald-400' : 'text-amber-400'}`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${isAgentReady ? 'bg-emerald-400' : 'bg-amber-400'}`}
-            />
+        <div className="ml-auto flex items-center gap-4 no-drag">
+          <GoogleSignIn />
+          <div className="w-px h-5 bg-slate-700" />
+          <div className={`flex items-center gap-1.5 text-xs ${isAgentReady ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <span className={`w-2 h-2 rounded-full ${isAgentReady ? 'bg-emerald-400' : 'bg-amber-400'}`} />
             {isAgentReady ? 'AI Ready' : 'No API Key'}
           </div>
-
           {hasAnyFolder && (
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
               <Shield className="w-3.5 h-3.5 text-emerald-500" />
-              <span>
-                {folders.length} folder{folders.length > 1 ? 's' : ''}
-              </span>
+              <span>{folders.length} folder{folders.length > 1 ? 's' : ''}</span>
             </div>
           )}
         </div>
@@ -411,10 +364,7 @@ function App(): JSX.Element {
       {/* Main */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside
-          className="bg-slate-800 border-r border-slate-700 flex flex-col"
-          style={{ width: sidebarWidth }}
-        >
+        <aside className="bg-slate-800 border-r border-slate-700 flex flex-col" style={{ width: sidebarWidth }}>
           <div className="p-3 border-b border-slate-700 flex items-center justify-between">
             <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide">Files</h2>
             <button
@@ -436,10 +386,7 @@ function App(): JSX.Element {
             {!isLoading && folders.length === 0 && (
               <div className="p-4 text-center">
                 <p className="text-sm text-slate-500 mb-3">No folder selected</p>
-                <button
-                  onClick={handleSelectFolder}
-                  className="text-sm text-sky-400 hover:text-sky-300"
-                >
+                <button onClick={handleSelectFolder} className="text-sm text-sky-400 hover:text-sky-300">
                   + Add a folder
                 </button>
               </div>
@@ -449,10 +396,7 @@ function App(): JSX.Element {
               <div key={folder.path} className="border-b border-slate-700/50">
                 <div className="flex items-center gap-2 px-3 py-2 bg-slate-750 hover:bg-slate-700/30 group">
                   <FolderOpen className="w-4 h-4 text-sky-400 flex-shrink-0" />
-                  <span
-                    className="text-sm text-slate-200 truncate flex-1"
-                    title={folder.path}
-                  >
+                  <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>
                     {folder.name}
                   </span>
                   <button
@@ -462,11 +406,7 @@ function App(): JSX.Element {
                     <X className="w-3 h-3" />
                   </button>
                 </div>
-                <FileTree
-                  entries={folder.entries}
-                  onFileSelect={handleFileSelect}
-                  selectedPath={selectedFile?.path}
-                />
+                <FileTree entries={folder.entries} onFileSelect={handleFileSelect} selectedPath={selectedFile?.path} />
               </div>
             ))}
           </div>
@@ -534,7 +474,6 @@ function App(): JSX.Element {
                     <ChatMessage key={msg.id} message={msg} />
                   ))}
 
-                  {/* Processing state with routing indicator */}
                   {isProcessing && (
                     <div className="flex gap-3">
                       <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
@@ -562,7 +501,6 @@ function App(): JSX.Element {
                   )}
                 </>
               )}
-
               <div ref={messagesEndRef} />
             </div>
           </div>
@@ -598,16 +536,13 @@ function App(): JSX.Element {
           </div>
         </main>
 
-        {/* Right Panel with Tabs */}
+        {/* Right Panel */}
         <aside className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col">
-          {/* Tab buttons */}
           <div className="flex border-b border-slate-700">
             <button
               onClick={() => setActiveTab('progress')}
               className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
-                activeTab === 'progress'
-                  ? 'text-slate-200 border-b-2 border-sky-500'
-                  : 'text-slate-500 hover:text-slate-300'
+                activeTab === 'progress' ? 'text-slate-200 border-b-2 border-sky-500' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
               Progress
@@ -615,9 +550,7 @@ function App(): JSX.Element {
             <button
               onClick={() => setActiveTab('review')}
               className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${
-                activeTab === 'review'
-                  ? 'text-slate-200 border-b-2 border-sky-500'
-                  : 'text-slate-500 hover:text-slate-300'
+                activeTab === 'review' ? 'text-slate-200 border-b-2 border-sky-500' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
               Review
@@ -630,22 +563,18 @@ function App(): JSX.Element {
             <button
               onClick={() => setActiveTab('metrics')}
               className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
-                activeTab === 'metrics'
-                  ? 'text-slate-200 border-b-2 border-sky-500'
-                  : 'text-slate-500 hover:text-slate-300'
+                activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-sky-500' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
               Stats
             </button>
           </div>
 
-          {/* Tab content */}
           {activeTab === 'progress' && <ProgressPanel />}
           {activeTab === 'review' && (
             <ReviewPanel
               onComplete={async () => {
                 setPendingCount(0)
-                // Refresh folders after deletions
                 for (const folder of folders) {
                   const newEntries = await window.api.fs.listDir(folder.path)
                   useAppStore.getState().updateFolderEntries(folder.path, newEntries)

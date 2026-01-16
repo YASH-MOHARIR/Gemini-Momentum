@@ -30,15 +30,18 @@ interface TrashEntry {
   name: string
 }
 
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-interface ToolCallResult {
+interface ToolCall {
   name: string
   args: Record<string, string>
   result: unknown
+}
+
+interface AgentResponse {
+  message: string
+  toolCalls?: ToolCall[]
+  error?: string
+  classification?: TaskClassification
+  executorUsed?: string
 }
 
 interface TaskClassification {
@@ -47,7 +50,7 @@ interface TaskClassification {
   requiresMultipleTools: boolean
   estimatedSteps: number
   complexityScore: number
-  recommendedExecutor: 'flash-minimal' | 'flash-high' | 'pro-high'
+  recommendedExecutor: string
   reasoning: string
 }
 
@@ -63,93 +66,93 @@ interface SessionMetrics {
   estimatedSavings: number
 }
 
-interface AgentResponse {
-  message: string
-  toolCalls?: ToolCallResult[]
-  error?: string
-  classification?: TaskClassification
-  executorUsed?: 'flash-minimal' | 'flash-high' | 'pro-high'
-}
-
 interface PendingAction {
   id: string
-  type: 'delete' | 'move' | 'rename' | 'overwrite'
-  sourcePath: string
-  destinationPath?: string
+  type: 'delete'
+  path: string
   fileName: string
   fileSize: number
-  reason?: string
-  createdAt: string
+  isDirectory: boolean
+  reason: string
+  queuedAt: string
 }
 
-interface ActionResult {
-  id: string
-  success: boolean
-  error?: string
+interface GoogleUser {
+  email: string
+  name: string
+  picture?: string
 }
 
-interface MomentumAPI {
+interface GoogleAPI {
+  isInitialized: () => Promise<boolean>
+  isSignedIn: () => Promise<boolean>
+  getUser: () => Promise<GoogleUser | null>
+  signIn: () => Promise<{ success: boolean; error?: string }>
+  signOut: () => Promise<{ success: boolean }>
+  onSignedIn: (callback: () => void) => () => void
+  onSignedOut: (callback: () => void) => () => void
+}
+
+interface FileSystemAPI {
+  listDir: (path: string) => Promise<FileEntry[]>
+  expandDir: (path: string) => Promise<FileEntry[]>
+  readFile: (path: string) => Promise<string>
+  readFileBuffer: (path: string) => Promise<string>
+  writeFile: (path: string, content: string) => Promise<OperationResult>
+  createFolder: (path: string) => Promise<OperationResult>
+  deleteFile: (path: string) => Promise<OperationResult>
+  permanentDelete: (path: string) => Promise<OperationResult>
+  moveFile: (from: string, to: string) => Promise<OperationResult>
+  renameFile: (path: string, newName: string) => Promise<OperationResult>
+  copyFile: (from: string, to: string) => Promise<OperationResult>
+  getFileInfo: (path: string) => Promise<FileInfo>
+  pathExists: (path: string) => Promise<boolean>
+  getDirSize: (path: string) => Promise<number>
+  getTrash: () => Promise<TrashEntry[]>
+  restoreFromTrash: (trashPath: string) => Promise<OperationResult>
+  emptyTrash: () => Promise<OperationResult>
+  onChanged: (callback: () => void) => () => void
+}
+
+interface AgentAPI {
+  isReady: () => Promise<boolean>
+  test: () => Promise<{ success: boolean; error?: string }>
+  chat: (
+    messages: Array<{ role: string; content: string }>,
+    grantedFolders: string[],
+    selectedFile?: string
+  ) => Promise<AgentResponse>
+  getMetrics: () => Promise<SessionMetrics>
+  resetMetrics: () => Promise<void>
+  onStreamChunk: (callback: (chunk: string) => void) => () => void
+  onStreamEnd: (callback: () => void) => () => void
+  onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => () => void
+  onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
+  onRoutingStart: (callback: () => void) => () => void
+  onRoutingComplete: (callback: (classification: TaskClassification) => void) => () => void
+}
+
+interface PendingAPI {
+  getAll: () => Promise<PendingAction[]>
+  getCount: () => Promise<number>
+  approve: (id: string) => Promise<OperationResult>
+  reject: (id: string) => Promise<OperationResult>
+  approveAll: () => Promise<OperationResult>
+  rejectAll: () => Promise<OperationResult>
+  onNewAction: (callback: (action: PendingAction) => void) => () => void
+}
+
+interface ElectronAPI {
   selectFolder: () => Promise<string | null>
-  getVersion: () => Promise<string>
-  platform: string
-
-  fs: {
-    listDir: (path: string) => Promise<FileEntry[]>
-    expandDir: (path: string) => Promise<FileEntry[]>
-    readFile: (path: string) => Promise<string>
-    readFileBuffer: (path: string) => Promise<string>
-    getFileInfo: (path: string) => Promise<FileInfo>
-    pathExists: (path: string) => Promise<boolean>
-    getDirSize: (path: string) => Promise<number>
-    writeFile: (path: string, content: string) => Promise<OperationResult>
-    createFolder: (path: string) => Promise<OperationResult>
-    deleteFile: (path: string) => Promise<OperationResult>
-    permanentDelete: (path: string) => Promise<OperationResult>
-    moveFile: (from: string, to: string) => Promise<OperationResult>
-    renameFile: (path: string, newName: string) => Promise<OperationResult>
-    copyFile: (from: string, to: string) => Promise<OperationResult>
-    getTrash: () => Promise<TrashEntry[]>
-    restoreFromTrash: (trashPath: string) => Promise<OperationResult>
-    emptyTrash: () => Promise<OperationResult>
-  }
-
-  agent: {
-    init: (apiKey: string) => Promise<{ success: boolean; error?: string }>
-    isReady: () => Promise<boolean>
-    chat: (
-      messages: ChatMessage[],
-      grantedFolders: string[],
-      selectedFile?: string
-    ) => Promise<AgentResponse>
-    test: () => Promise<{ success: boolean; error?: string }>
-    getMetrics: () => Promise<SessionMetrics>
-    resetMetrics: () => Promise<void>
-    onStreamChunk: (callback: (chunk: string) => void) => () => void
-    onStreamEnd: (callback: () => void) => () => void
-    onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => () => void
-    onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
-    onRoutingStart: (callback: () => void) => () => void
-    onRoutingComplete: (callback: (classification: TaskClassification) => void) => () => void
-  }
-
-  pending: {
-    getAll: () => Promise<PendingAction[]>
-    getCount: () => Promise<number>
-    getSize: () => Promise<number>
-    queueDeletion: (filePath: string, reason?: string) => Promise<PendingAction>
-    queueMultiple: (filePaths: string[], reason?: string) => Promise<PendingAction[]>
-    executeOne: (actionId: string) => Promise<ActionResult>
-    executeAll: () => Promise<ActionResult[]>
-    executeSelected: (actionIds: string[]) => Promise<ActionResult[]>
-    removeOne: (actionId: string) => Promise<boolean>
-    keepAll: () => Promise<number>
-    clear: () => Promise<void>
-  }
+  fs: FileSystemAPI
+  agent: AgentAPI
+  pending: PendingAPI
+  google: GoogleAPI
 }
 
 declare global {
   interface Window {
-    api: MomentumAPI
+    api: ElectronAPI
   }
 }
 

@@ -5,6 +5,9 @@ import icon from '../../resources/icon.png?asset'
 import * as fileSystem from './services/fileSystem'
 import * as gemini from './services/gemini'
 import * as pendingActions from './services/pendingActions'
+import * as googleAuth from './services/googleAuth'
+import * as googleSheets from './services/googleSheets'
+import * as gmail from './services/gmail'
 import { config } from 'dotenv'
 
 config()
@@ -208,17 +211,81 @@ ipcMain.handle('pending:clear', () => {
   pendingActions.clearPendingActions()
 })
 
+// ============ Google Auth Handlers ============
+
+ipcMain.handle('google:is-initialized', () => {
+  return googleAuth.isGoogleAuthInitialized()
+})
+
+ipcMain.handle('google:is-signed-in', async () => {
+  return await googleAuth.isSignedIn()
+})
+
+ipcMain.handle('google:get-user', async () => {
+  return await googleAuth.getUserInfo()
+})
+
+ipcMain.handle('google:sign-in', async () => {
+  return await googleAuth.signIn(mainWindow)
+})
+
+ipcMain.handle('google:sign-out', async () => {
+  await googleAuth.signOut()
+  mainWindow?.webContents.send('google:signed-out')
+  return { success: true }
+})
+
+// Google Sheets handlers (for direct UI calls if needed)
+ipcMain.handle('google:create-sheet', async (_, data: {
+  title: string
+  headers: string[]
+  rows: (string | number)[][]
+  sheetName?: string
+}) => {
+  return await googleSheets.createGoogleSheet({
+    title: data.title,
+    headers: data.headers,
+    rows: data.rows,
+    sheetName: data.sheetName
+  })
+})
+
+// Gmail handlers (for direct UI calls if needed)
+ipcMain.handle('google:search-gmail', async (_, query: string, maxResults?: number) => {
+  return await gmail.searchEmails(query, maxResults || 20)
+})
+
 // ============ App Lifecycle ============
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.momentum.app')
 
+  // Initialize Gemini
   const apiKey = process.env.GEMINI_API_KEY
   if (apiKey) {
     gemini.initializeGemini(apiKey)
-    console.log('Gemini initialized from environment')
+    console.log('[MAIN] Gemini initialized from environment')
   } else {
-    console.warn('No GEMINI_API_KEY found in environment')
+    console.warn('[MAIN] No GEMINI_API_KEY found in environment')
+  }
+
+  // Initialize Google Auth
+  const googleClientId = process.env.GOOGLE_CLIENT_ID
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET
+
+  if (googleClientId && googleClientSecret) {
+    googleAuth.initializeGoogleAuth(googleClientId, googleClientSecret)
+    console.log('[MAIN] Google Auth initialized')
+
+    // Check if already signed in (restore session)
+    googleAuth.isSignedIn().then(signedIn => {
+      if (signedIn) {
+        console.log('[MAIN] Google session restored')
+        mainWindow?.webContents.send('google:signed-in')
+      }
+    })
+  } else {
+    console.log('[MAIN] Google credentials not found - Google features disabled')
   }
 
   app.on('browser-window-created', (_, window) => {

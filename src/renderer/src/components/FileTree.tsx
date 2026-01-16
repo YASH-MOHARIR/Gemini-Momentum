@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   ChevronRight, 
   ChevronDown, 
@@ -57,6 +57,33 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath }: FileTreeItem
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[]>(entry.children || [])
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Sync children state when entry.children prop changes (from parent refresh)
+  useEffect(() => {
+    if (entry.children) {
+      setChildren(entry.children)
+    }
+  }, [entry.children])
+
+  // Also refresh when the entry path changes (means folder was updated)
+  useEffect(() => {
+    // If folder is expanded and we get new entries, keep it expanded
+    // This handles the case where parent refreshes the tree
+    const refreshExpandedFolder = async () => {
+      if (entry.isDirectory && isExpanded) {
+        try {
+          const loadedChildren = await window.api.fs.expandDir(entry.path)
+          setChildren(loadedChildren)
+        } catch (err) {
+          console.error('Failed to refresh directory:', err)
+        }
+      }
+    }
+    
+    // Small delay to batch rapid updates
+    const timeoutId = setTimeout(refreshExpandedFolder, 100)
+    return () => clearTimeout(timeoutId)
+  }, [entry.path, entry.modified, isExpanded])
   
   const isSelected = selectedPath === entry.path
   const FileIcon = entry.isDirectory 

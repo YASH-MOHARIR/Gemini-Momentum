@@ -88,6 +88,12 @@ export interface ActionResult {
   error?: string
 }
 
+export interface GoogleUser {
+  email: string
+  name: string
+  picture?: string
+}
+
 const api = {
   // App
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
@@ -125,7 +131,14 @@ const api = {
     getTrash: (): Promise<TrashEntry[]> => ipcRenderer.invoke('fs:get-trash'),
     restoreFromTrash: (trashPath: string): Promise<OperationResult> =>
       ipcRenderer.invoke('fs:restore-from-trash', trashPath),
-    emptyTrash: (): Promise<OperationResult> => ipcRenderer.invoke('fs:empty-trash')
+    emptyTrash: (): Promise<OperationResult> => ipcRenderer.invoke('fs:empty-trash'),
+
+    // File system change listener
+    onChanged: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('fs:changed', handler)
+      return () => ipcRenderer.removeListener('fs:changed', handler)
+    }
   },
 
   // Agent / Gemini operations
@@ -198,7 +211,50 @@ const api = {
     removeOne: (actionId: string): Promise<boolean> =>
       ipcRenderer.invoke('pending:remove-one', actionId),
     keepAll: (): Promise<number> => ipcRenderer.invoke('pending:keep-all'),
-    clear: (): Promise<void> => ipcRenderer.invoke('pending:clear')
+    clear: (): Promise<void> => ipcRenderer.invoke('pending:clear'),
+
+    // Listen for new pending actions
+    onNewAction: (callback: (action: PendingAction) => void) => {
+      const handler = (_: unknown, action: PendingAction) => callback(action)
+      ipcRenderer.on('pending:new-action', handler)
+      return () => ipcRenderer.removeListener('pending:new-action', handler)
+    }
+  },
+
+  // Google Integration
+  google: {
+    isInitialized: (): Promise<boolean> => ipcRenderer.invoke('google:is-initialized'),
+    isSignedIn: (): Promise<boolean> => ipcRenderer.invoke('google:is-signed-in'),
+    getUser: (): Promise<GoogleUser | null> => ipcRenderer.invoke('google:get-user'),
+    signIn: (): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('google:sign-in'),
+    signOut: (): Promise<{ success: boolean }> => ipcRenderer.invoke('google:sign-out'),
+
+    // Direct API calls (optional, mostly used through agent tools)
+    createSheet: (data: {
+      title: string
+      headers: string[]
+      rows: (string | number)[][]
+      sheetName?: string
+    }): Promise<{ success: boolean; spreadsheetUrl?: string; error?: string }> =>
+      ipcRenderer.invoke('google:create-sheet', data),
+    searchGmail: (
+      query: string,
+      maxResults?: number
+    ): Promise<{ success: boolean; emails?: unknown[]; error?: string }> =>
+      ipcRenderer.invoke('google:search-gmail', query, maxResults),
+
+    // Event listeners
+    onSignedIn: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('google:signed-in', handler)
+      return () => ipcRenderer.removeListener('google:signed-in', handler)
+    },
+    onSignedOut: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('google:signed-out', handler)
+      return () => ipcRenderer.removeListener('google:signed-out', handler)
+    }
   }
 }
 

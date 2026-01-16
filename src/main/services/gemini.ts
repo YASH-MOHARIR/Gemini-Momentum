@@ -3,14 +3,20 @@ import { BrowserWindow } from 'electron'
 import * as fileSystem from './fileSystem'
 import * as spreadsheet from './spreadsheet'
 import * as fileOrganizer from './fileOrganizer'
+import * as pendingActions from './pendingActions'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+
+import * as googleSheets from './googleSheets'
+import * as gmail from './gmail'
+import { isSignedIn as isGoogleSignedIn } from './googleAuth'
+import { app } from 'electron'
 
 // ============ MODEL CONFIGURATION ============
 
 const MODELS = {
-  FLASH: 'gemini-2.0-flash-exp',
-  PRO: 'gemini-2.0-flash-exp'
+  FLASH: 'gemini-2.5-flash',
+  PRO: 'gemini-2.5-flash'
 } as const
 
 type ExecutorProfile = 'flash-minimal' | 'flash-high' | 'pro-high'
@@ -340,7 +346,7 @@ Use this to analyze document contents, read data files, or view code.`,
   },
   {
     name: 'delete_file',
-    description: 'Delete a file or folder by moving it to trash (can be restored).',
+    description: 'Queue a file or folder for deletion. The deletion is NOT immediate - it will be added to the Review panel where the user must approve it before the file is actually deleted. This ensures user safety.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -571,9 +577,115 @@ Example results:
       },
       required: ['path']
     }
+  },
+  {
+    name: 'categorize_images',
+    description: `Categorize images in a folder using AI Vision and organize them into subfolders.
+Categories: Receipts, Screenshots, Photos, Documents, Memes, Artwork, Other.
+
+Process:
+1. Scans folder for all image files
+2. Analyzes each image with Vision to determine category
+3. Shows categorization plan for user review
+4. Creates category subfolders and moves images
+
+Use this to organize messy image folders, sort downloads, or separate different types of images.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        folder_path: {
+          type: 'STRING',
+          description: 'The full absolute path to the folder containing images'
+        },
+        execute: {
+          type: 'BOOLEAN',
+          description: 'If true, execute the organization. If false/omitted, just show the plan.'
+        }
+      },
+      required: ['folder_path']
+    }
   }
 ]
 
+const googleTools = [
+  {
+    name: 'export_to_google_sheets',
+    description: `Export data to a new Google Sheet. Creates a formatted spreadsheet with headers, auto-filter, and returns a shareable link.
+Requires: User must be signed into Google.
+Use this when user asks to "put in Google Sheets", "upload to Sheets", "create a Google spreadsheet", etc.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title: { type: 'STRING', description: 'Title for the Google Sheet' },
+        headers: { type: 'STRING', description: 'JSON array of column headers. Example: ["Name", "Date", "Amount"]' },
+        rows: { type: 'STRING', description: 'JSON array of row arrays. Example: [["Item 1", "2024-01-15", 100]]' },
+        sheet_name: { type: 'STRING', description: 'Optional worksheet name (default: Sheet1)' }
+      },
+      required: ['title', 'headers', 'rows']
+    }
+  },
+  {
+    name: 'create_expense_report_sheets',
+    description: `Create an expense report directly in Google Sheets with professional formatting.
+Includes: Expenses sheet with all line items, Summary sheet with category totals, currency formatting, and auto-filter.
+Requires: User must be signed into Google.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title: { type: 'STRING', description: 'Title for the expense report' },
+        expenses: { type: 'STRING', description: 'JSON array of expense objects. Each: {"vendor": "Store", "date": "2024-01-15", "category": "Food", "description": "Lunch", "amount": 25.50}' }
+      },
+      required: ['title', 'expenses']
+    }
+  },
+  {
+    name: 'search_gmail',
+    description: `Search Gmail for emails matching criteria.
+Returns: List of emails with subject, sender, date, and attachment info.
+Requires: User must be signed into Google.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'Gmail search query. Examples: "from:amazon receipt", "invoice after:2024/01/01"' },
+        max_results: { type: 'STRING', description: 'Maximum emails to return (default: 20)' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: 'download_gmail_receipts',
+    description: `Search Gmail for receipt/invoice emails and download their attachments.
+Automatically filters for PDF and image attachments.
+Requires: User must be signed into Google.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'Gmail search query (e.g., "after:2024/01/01")' },
+        output_folder: { type: 'STRING', description: 'Folder where attachments will be saved' },
+        max_emails: { type: 'STRING', description: 'Maximum emails to search (default: 20)' }
+      },
+      required: ['query', 'output_folder']
+    }
+  },
+  {
+    name: 'gmail_to_expense_report',
+    description: `Complete workflow: Search Gmail for receipts, download attachments, analyze with Vision, and create expense report in Google Sheets.
+This is the full "Gmail → Sheets" pipeline in one command.
+Requires: User must be signed into Google.`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        gmail_query: { type: 'STRING', description: 'Gmail search query (e.g., "after:2024/01/01")' },
+        report_title: { type: 'STRING', description: 'Title for the expense report' },
+        category_hint: { type: 'STRING', description: 'Optional category hint (e.g., "business travel")' }
+      },
+      required: ['gmail_query', 'report_title']
+    }
+  }
+]
+
+// Combine all tools
+const allTools = [...fileTools, ...googleTools]
 // ============ IMAGE ANALYSIS ============
 
 async function analyzeImage(imagePath: string, prompt: string): Promise<string> {
@@ -702,7 +814,7 @@ async function processReceiptsBatch(
     // Find all image files in folder
     const entries = await fs.readdir(folderPath, { withFileTypes: true })
     const imageFiles = entries
-      .filter(e => !e.isDirectory && isImageFile(e.name))
+      .filter(e => !e.isDirectory() && isImageFile(e.name))
       .map(e => path.join(folderPath, e.name))
 
     if (imageFiles.length === 0) {
@@ -929,9 +1041,256 @@ Return ONLY the filename, nothing else.`
   }
 }
 
+// ============ IMAGE CATEGORIZATION ============
+
+type ImageCategory = 'Receipts' | 'Screenshots' | 'Photos' | 'Documents' | 'Memes' | 'Artwork' | 'Other'
+
+interface ImageCategorization {
+  filePath: string
+  fileName: string
+  category: ImageCategory
+  confidence: number
+  description: string
+}
+
+interface CategorizationResult {
+  success: boolean
+  totalImages: number
+  categorized: number
+  plan: Record<ImageCategory, ImageCategorization[]>
+  executed: boolean
+  moved?: number
+  summary: string
+  error?: string
+}
+
+async function categorizeImage(imagePath: string): Promise<ImageCategorization | null> {
+  if (!client) {
+    throw new Error('Gemini not initialized')
+  }
+
+  try {
+    const imageBuffer = await fs.readFile(imagePath)
+    const base64Image = imageBuffer.toString('base64')
+    const mimeType = getMimeType(imagePath)
+
+    const model = client.getGenerativeModel({
+      model: MODELS.FLASH,
+      generationConfig: { temperature: 0.1 }
+    })
+
+    const prompt = `Categorize this image into ONE of these categories:
+- Receipts: Store receipts, invoices, bills, payment confirmations
+- Screenshots: Screen captures from apps, websites, games, error messages
+- Photos: Personal photos, camera pictures, selfies, travel photos, nature
+- Documents: Scanned documents, forms, certificates, ID cards, letters
+- Memes: Funny images, reaction images, social media content, comics
+- Artwork: Digital art, illustrations, design work, logos, graphics
+
+Return ONLY a valid JSON object:
+{
+  "category": "Receipts" | "Screenshots" | "Photos" | "Documents" | "Memes" | "Artwork" | "Other",
+  "confidence": 0.0-1.0,
+  "description": "brief description of image content"
+}
+
+Return ONLY the JSON, nothing else.`
+
+    const result = await model.generateContent([
+      { inlineData: { mimeType, data: base64Image } },
+      { text: prompt }
+    ])
+
+    const responseText = result.response.text()
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    
+    if (!jsonMatch) {
+      console.error(`[CATEGORIZE] No JSON found for ${path.basename(imagePath)}`)
+      return null
+    }
+
+    const data = JSON.parse(jsonMatch[0])
+
+    return {
+      filePath: imagePath,
+      fileName: path.basename(imagePath),
+      category: data.category || 'Other',
+      confidence: data.confidence || 0.5,
+      description: data.description || 'Unknown content'
+    }
+  } catch (error) {
+    console.error(`[CATEGORIZE] Error processing ${imagePath}:`, error)
+    return null
+  }
+}
+
+async function categorizeImages(
+  folderPath: string,
+  execute: boolean = false
+): Promise<CategorizationResult> {
+  console.log(`[CATEGORIZE] Starting image categorization in: ${folderPath}`)
+  console.log(`[CATEGORIZE] Execute mode: ${execute}`)
+
+  try {
+    // Find all image files
+    const entries = await fs.readdir(folderPath, { withFileTypes: true })
+    const imageFiles = entries
+      .filter(e => !e.isDirectory() && isImageFile(e.name))
+      .map(e => path.join(folderPath, e.name))
+
+    if (imageFiles.length === 0) {
+      return {
+        success: false,
+        totalImages: 0,
+        categorized: 0,
+        plan: {} as Record<ImageCategory, ImageCategorization[]>,
+        executed: false,
+        summary: 'No image files found in folder.',
+        error: 'No images found'
+      }
+    }
+
+    console.log(`[CATEGORIZE] Found ${imageFiles.length} images`)
+
+    // Categorize each image
+    const plan: Record<ImageCategory, ImageCategorization[]> = {
+      Receipts: [],
+      Screenshots: [],
+      Photos: [],
+      Documents: [],
+      Memes: [],
+      Artwork: [],
+      Other: []
+    }
+
+    let categorized = 0
+
+    for (const imagePath of imageFiles) {
+      console.log(`[CATEGORIZE] Processing: ${path.basename(imagePath)}`)
+      
+      const result = await categorizeImage(imagePath)
+      
+      if (result) {
+        plan[result.category].push(result)
+        categorized++
+      } else {
+        // Default to Other if categorization failed
+        plan.Other.push({
+          filePath: imagePath,
+          fileName: path.basename(imagePath),
+          category: 'Other',
+          confidence: 0,
+          description: 'Could not categorize'
+        })
+      }
+
+      // Rate limit protection
+      await new Promise(resolve => setTimeout(resolve, 300))
+    }
+
+    // Generate summary
+    const summaryLines = [
+      `**Image Categorization ${execute ? 'Complete' : 'Plan'}**`,
+      ``,
+      `Total images: ${imageFiles.length}`,
+      `Successfully categorized: ${categorized}`,
+      ``
+    ]
+
+    const nonEmptyCategories = Object.entries(plan).filter(([_, images]) => images.length > 0)
+    
+    if (nonEmptyCategories.length > 0) {
+      summaryLines.push(`**By Category:**`)
+      for (const [category, images] of nonEmptyCategories) {
+        summaryLines.push(`• ${category}: ${images.length} images`)
+      }
+    }
+
+    // Execute if requested
+    let moved = 0
+    if (execute) {
+      summaryLines.push(``, `**Moving files...**`)
+      
+      for (const [category, images] of Object.entries(plan)) {
+        if (images.length === 0) continue
+
+        const categoryFolder = path.join(folderPath, category)
+        
+        // Create category folder
+        try {
+          await fs.mkdir(categoryFolder, { recursive: true })
+        } catch {
+          // Folder might exist
+        }
+
+        // Move files
+        for (const img of images) {
+          try {
+            const destPath = path.join(categoryFolder, img.fileName)
+            
+            // Check if destination exists
+            try {
+              await fs.access(destPath)
+              // Add timestamp if exists
+              const ext = path.extname(img.fileName)
+              const base = path.basename(img.fileName, ext)
+              const newDest = path.join(categoryFolder, `${base}_${Date.now()}${ext}`)
+              await fs.rename(img.filePath, newDest)
+            } catch {
+              await fs.rename(img.filePath, destPath)
+            }
+            
+            moved++
+          } catch (error) {
+            console.error(`[CATEGORIZE] Failed to move ${img.fileName}:`, error)
+          }
+        }
+      }
+
+      summaryLines.push(`• Files moved: ${moved}`)
+    } else {
+      summaryLines.push(``, `⚠️ This is a preview. Run with execute=true to move files.`)
+    }
+
+    return {
+      success: true,
+      totalImages: imageFiles.length,
+      categorized,
+      plan,
+      executed: execute,
+      moved: execute ? moved : undefined,
+      summary: summaryLines.join('\n')
+    }
+
+  } catch (error) {
+    console.error('[CATEGORIZE] Error:', error)
+    return {
+      success: false,
+      totalImages: 0,
+      categorized: 0,
+      plan: {} as Record<ImageCategory, ImageCategorization[]>,
+      executed: false,
+      summary: `Error: ${error}`,
+      error: String(error)
+    }
+  }
+}
+
 // ============ TOOL EXECUTOR ============
 
-async function executeTool(name: string, args: Record<string, string>): Promise<unknown> {
+// Track tools that modify the file system
+const FILE_MODIFYING_TOOLS = [
+  'write_file', 'create_folder', 'move_file', 
+  'rename_file', 'copy_file', 'execute_organization', 
+  'categorize_images', 'smart_rename', 'process_receipts',
+  'create_spreadsheet', 'create_expense_report'
+]
+
+async function executeTool(
+  name: string, 
+  args: Record<string, string>,
+  mainWindow?: BrowserWindow | null
+): Promise<unknown> {
   console.log(`[TOOL EXECUTE] ${name}:`, JSON.stringify(args))
 
   try {
@@ -950,7 +1309,22 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
         result = await fileSystem.createFolder(args.path)
         break
       case 'delete_file':
-        result = await fileSystem.deleteFile(args.path)
+        // Queue for review instead of direct deletion
+        try {
+          const action = await pendingActions.queueDeletion(args.path, 'Requested by AI assistant')
+          result = { 
+            success: true, 
+            queued: true,
+            message: `File "${action.fileName}" has been queued for deletion. Please review in the Review panel before it is permanently deleted.`,
+            actionId: action.id
+          }
+          // Notify UI to show review panel
+          if (mainWindow) {
+            mainWindow.webContents.send('pending:new-action', action)
+          }
+        } catch (error) {
+          result = { success: false, error: `Failed to queue deletion: ${error}` }
+        }
         break
       case 'move_file':
         result = await fileSystem.moveFile(args.source_path, args.destination_path)
@@ -987,8 +1361,9 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
         break
       case 'organize_files':
         try {
+          const includeSubfolders = String(args.include_subfolders).toLowerCase() === 'true'
           const plan = await fileOrganizer.createOrganizationPlan(args.path, {
-            includeSubfolders: args.include_subfolders === 'true'
+            includeSubfolders
           })
           const summary = fileOrganizer.getPlanSummary(plan)
           result = { success: true, plan, summary }
@@ -998,9 +1373,10 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
         break
       case 'execute_organization':
         try {
+          const deleteJunk = String(args.delete_junk).toLowerCase() === 'true'
           const plan = await fileOrganizer.createOrganizationPlan(args.path)
           const orgResult = await fileOrganizer.executeOrganization(args.path, plan, {
-            deleteJunk: args.delete_junk === 'true'
+            deleteJunk
           })
           const summary = fileOrganizer.getResultSummary(orgResult)
           result = { ...orgResult, summary }
@@ -1026,10 +1402,180 @@ async function executeTool(name: string, args: Record<string, string>): Promise<
           result = { error: `Failed to rename file: ${error}` }
         }
         break
+      case 'categorize_images':
+        try {
+          // Handle both boolean true and string 'true' from Gemini
+          const shouldExecute = String(args.execute).toLowerCase() === 'true'
+          console.log(`[CATEGORIZE] shouldExecute resolved to: ${shouldExecute} (raw: ${args.execute}, type: ${typeof args.execute})`)
+          result = await categorizeImages(
+            args.folder_path,
+            shouldExecute
+          )
+        } catch (error) {
+          result = { error: `Failed to categorize images: ${error}` }
+        }
+        break
+        case 'export_to_google_sheets': {
+        const signedIn = await isGoogleSignedIn()
+        if (!signedIn) {
+          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          break
+        }
+        try {
+          const headers = JSON.parse(args.headers)
+          const rows = JSON.parse(args.rows)
+          result = await googleSheets.createGoogleSheet({
+            title: args.title,
+            sheetName: args.sheet_name,
+            headers,
+            rows
+          })
+        } catch (parseError) {
+          result = { error: `Failed to parse data: ${parseError}` }
+        }
+        break
+      }
+
+      case 'create_expense_report_sheets': {
+        const signedIn = await isGoogleSignedIn()
+        if (!signedIn) {
+          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          break
+        }
+        try {
+          const expenses = JSON.parse(args.expenses)
+          result = await googleSheets.createExpenseReportSheet(args.title, expenses)
+        } catch (parseError) {
+          result = { error: `Failed to parse expenses: ${parseError}` }
+        }
+        break
+      }
+
+      case 'search_gmail': {
+        const signedIn = await isGoogleSignedIn()
+        if (!signedIn) {
+          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          break
+        }
+        const maxResults = parseInt(args.max_results) || 20
+        result = await gmail.searchEmails(args.query, maxResults)
+        break
+      }
+
+      case 'download_gmail_receipts': {
+        const signedIn = await isGoogleSignedIn()
+        if (!signedIn) {
+          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          break
+        }
+        const maxEmails = parseInt(args.max_emails) || 20
+        result = await gmail.searchAndDownloadReceipts(args.query, args.output_folder, maxEmails)
+        break
+      }
+
+      case 'gmail_to_expense_report': {
+        const signedIn = await isGoogleSignedIn()
+        if (!signedIn) {
+          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          break
+        }
+        
+        try {
+          // Step 1: Download receipts from Gmail
+          const tempDir = path.join(app.getPath('userData'), 'gmail-receipts-temp')
+          await fs.mkdir(tempDir, { recursive: true })
+          
+          console.log('[GMAIL→SHEETS] Step 1: Downloading receipts from Gmail...')
+          const downloadResult = await gmail.searchAndDownloadReceipts(args.gmail_query, tempDir, 30)
+          
+          if (!downloadResult.success || downloadResult.attachmentsDownloaded.length === 0) {
+            result = { 
+              success: false, 
+              error: downloadResult.error || 'No receipt attachments found in matching emails' 
+            }
+            break
+          }
+          
+          console.log(`[GMAIL→SHEETS] Downloaded ${downloadResult.attachmentsDownloaded.length} attachments`)
+          
+          // Step 2: Process each receipt with Vision
+          console.log('[GMAIL→SHEETS] Step 2: Analyzing receipts with Vision...')
+          const expenses: Array<{
+            vendor: string
+            date: string
+            category: string
+            description: string
+            amount: number
+          }> = []
+          
+          for (const att of downloadResult.attachmentsDownloaded) {
+            // Only process images (PDFs would need different handling)
+            if (att.mimeType.includes('image')) {
+              try {
+                const receiptData = await extractReceiptData(att.localPath, args.category_hint)
+                if (receiptData) {
+                  expenses.push({
+                    vendor: receiptData.vendor,
+                    date: receiptData.date,
+                    category: receiptData.category,
+                    description: receiptData.description,
+                    amount: receiptData.amount
+                  })
+                }
+              } catch (err) {
+                console.error(`[GMAIL→SHEETS] Failed to process ${att.filename}:`, err)
+              }
+              // Rate limit
+              await new Promise(r => setTimeout(r, 500))
+            }
+          }
+          
+          if (expenses.length === 0) {
+            result = { 
+              success: false, 
+              error: 'Could not extract data from any receipts' 
+            }
+            break
+          }
+          
+          console.log(`[GMAIL→SHEETS] Step 3: Creating Google Sheet with ${expenses.length} expenses...`)
+          
+          // Step 3: Create Google Sheet
+          const sheetResult = await googleSheets.createExpenseReportSheet(args.report_title, expenses)
+          
+          // Clean up temp files
+          try {
+            for (const att of downloadResult.attachmentsDownloaded) {
+              await fs.unlink(att.localPath).catch(() => {})
+            }
+          } catch {}
+          
+          result = {
+            success: sheetResult.success,
+            emailsSearched: downloadResult.emailsFound,
+            attachmentsDownloaded: downloadResult.attachmentsDownloaded.length,
+            receiptsProcessed: expenses.length,
+            totalAmount: sheetResult.totalAmount,
+            spreadsheetUrl: sheetResult.spreadsheetUrl,
+            error: sheetResult.error
+          }
+          
+        } catch (error) {
+          result = { success: false, error: String(error) }
+        }
+        break
+      }
       default:
         result = { error: `Unknown tool: ${name}` }
     }
     console.log(`[TOOL RESULT] ${name}:`, JSON.stringify(result).substring(0, 500))
+    
+    // Send file system refresh signal for modifying operations
+    if (FILE_MODIFYING_TOOLS.includes(name) && mainWindow) {
+      console.log(`[FS] Sending refresh signal after ${name}`)
+      mainWindow.webContents.send('fs:changed')
+    }
+    
     return result
   } catch (err) {
     console.error(`[TOOL ERROR] ${name}:`, err)
@@ -1082,7 +1628,7 @@ TOOLS AVAILABLE:
 - read_file: Read file contents (PDF, DOCX, XLSX, CSV, JSON, code, text)
 - write_file: Create or overwrite a text file
 - create_folder: Create a new folder
-- delete_file: Delete (moves to trash)
+- delete_file: Queue for deletion (user must approve in Review panel)
 - move_file: Move files/folders
 - rename_file: Rename files/folders
 - copy_file: Copy files/folders
@@ -1091,12 +1637,16 @@ TOOLS AVAILABLE:
 - create_expense_report: Create formatted expense reports from receipt data
 - organize_files: Scan folder and create organization plan by file type
 - execute_organization: Execute the organization plan (move files to category folders)
+- process_receipts: Batch process receipt images into expense report
+- smart_rename: Intelligently rename files based on content
+- categorize_images: Categorize images using AI Vision and organize into folders
 
 RULES:
 1. ALWAYS use FULL ABSOLUTE PATHS starting with "${workingFolder}"
 2. USE THE TOOLS - execute actions, don't just describe them
 3. After reading files, provide helpful analysis
 4. For images, use analyze_image with specific extraction prompts
+5. DELETIONS are queued for user approval - inform the user to check the Review panel
 
 RESPONSE FORMATTING:
 - Use clear paragraphs with blank lines between them
@@ -1160,7 +1710,7 @@ export async function chatStream(
     const model = client.getGenerativeModel({
       model: executorConfig.model,
       systemInstruction,
-      tools: [{ functionDeclarations: fileTools }],
+      tools: [{ functionDeclarations: allTools  }],
       generationConfig: {
         temperature: 1.0
       }
@@ -1209,7 +1759,7 @@ export async function chatStream(
         console.log(`[EXECUTOR:${executorProfile}] Tool: ${toolName}`)
         mainWindow?.webContents.send('agent:tool-call', { name: toolName, args: toolArgs })
 
-        const result = await executeTool(toolName, toolArgs)
+        const result = await executeTool(toolName, toolArgs, mainWindow)
         toolCalls.push({ name: toolName, args: toolArgs, result })
 
         mainWindow?.webContents.send('agent:tool-result', { name: toolName, result })
@@ -1304,7 +1854,7 @@ async function chatStreamWithExecutor(
     const model = client.getGenerativeModel({
       model: executorConfig.model,
       systemInstruction,
-      tools: [{ functionDeclarations: fileTools }]
+      tools: [{ functionDeclarations: allTools  }]
     })
 
     const history = messages.slice(0, -1).map((m) => ({
@@ -1342,7 +1892,7 @@ async function chatStreamWithExecutor(
         const toolArgs = (call.args || {}) as Record<string, string>
 
         mainWindow?.webContents.send('agent:tool-call', { name: toolName, args: toolArgs })
-        const result = await executeTool(toolName, toolArgs)
+        const result = await executeTool(toolName, toolArgs, mainWindow)
         toolCalls.push({ name: toolName, args: toolArgs, result })
         mainWindow?.webContents.send('agent:tool-result', { name: toolName, result })
 

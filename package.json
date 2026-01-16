@@ -27,6 +27,7 @@
     "chokidar": "^5.0.0",
     "dotenv": "^17.2.3",
     "electron-store": "^11.0.2",
+    "googleapis": "^170.1.0",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.11.0",
     "papaparse": "^5.5.3",
