@@ -83,6 +83,45 @@ interface GoogleUser {
   picture?: string
 }
 
+// ============ Agent/Watcher Types ============
+
+interface AgentRule {
+  id: string
+  text: string
+  enabled: boolean
+  order: number
+}
+
+interface AgentConfig {
+  watchFolder: string
+  rules: AgentRule[]
+  enableActivityLog: boolean
+  logPath: string
+}
+
+interface ActivityEntry {
+  id: string
+  timestamp: string
+  originalName: string
+  originalPath: string
+  action: 'moved' | 'renamed' | 'skipped' | 'error'
+  destination?: string
+  newName?: string
+  matchedRule?: number | null
+  usedAI: boolean
+  confidence?: number
+  error?: string
+}
+
+interface WatcherStatus {
+  running: boolean
+  paused: boolean
+  watchFolder?: string
+  rulesCount?: number
+}
+
+// ============ API Interfaces ============
+
 interface GoogleAPI {
   isInitialized: () => Promise<boolean>
   isSignedIn: () => Promise<boolean>
@@ -142,12 +181,26 @@ interface PendingAPI {
   onNewAction: (callback: (action: PendingAction) => void) => () => void
 }
 
+interface WatcherAPI {
+  start: (config: AgentConfig) => Promise<{ success: boolean; error?: string }>
+  stop: () => Promise<{ success: boolean }>
+  pause: () => Promise<{ success: boolean; paused: boolean }>
+  resume: () => Promise<{ success: boolean; paused: boolean }>
+  getStatus: () => Promise<WatcherStatus>
+  updateRules: (rules: AgentRule[]) => Promise<{ success: boolean }>
+  onReady: (callback: () => void) => () => void
+  onFileDetected: (callback: (data: { path: string; name: string }) => void) => () => void
+  onFileProcessed: (callback: (entry: ActivityEntry) => void) => () => void
+  onError: (callback: (error: string) => void) => () => void
+}
+
 interface ElectronAPI {
   selectFolder: () => Promise<string | null>
   fs: FileSystemAPI
   agent: AgentAPI
   pending: PendingAPI
   google: GoogleAPI
+  watcher: WatcherAPI
 }
 
 declare global {

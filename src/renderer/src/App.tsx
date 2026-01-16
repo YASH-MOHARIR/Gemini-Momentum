@@ -10,14 +10,20 @@ import {
   Bot,
   Wrench,
   AlertCircle,
-  Cpu
+  Cpu,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import FileTree from './components/FileTree'
 import ProgressPanel from './components/ProgressPanel'
 import MetricsPanel from './components/MetricsPanel'
 import ReviewPanel from './components/ReviewPanel'
 import GoogleSignIn from './components/GoogleSignIn'
+import TaskTemplates from './components/TaskTemplates'
+import AgentModeToggle from './components/AgentModeToggle'
+import AgentPanel from './components/AgentPanel'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
+import { useAgentStore } from './stores/agentStore'
 
 interface TaskClassification {
   taskType: string
@@ -74,7 +80,7 @@ function formatMessage(content: string): JSX.Element[] {
       const bulletContent = line.replace(/^[\s]*[•\-\*][\s]*/, '')
       elements.push(
         <div key={index} className="flex gap-2 ml-2">
-          <span className="text-sky-400">•</span>
+          <span className="text-accent-light">•</span>
           <span>{typeof formattedLine === 'string' ? bulletContent : formattedLine}</span>
         </div>
       )
@@ -93,12 +99,12 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-sky-600' : 'bg-slate-700'}`}>
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-accent' : 'bg-slate-700'}`}>
         {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
       </div>
 
       <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
-        <div className={`inline-block px-4 py-2 rounded-lg text-sm ${isUser ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-100'} ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}`}>
+        <div className={`inline-block px-4 py-2 rounded-lg text-sm ${isUser ? 'bg-accent text-white' : 'bg-slate-800 text-slate-100'} ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}`}>
           {message.isError && (
             <div className="flex items-center gap-2 mb-1 text-red-400">
               <AlertCircle className="w-4 h-4" />
@@ -110,7 +116,7 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
           ) : (
             <div className="space-y-1">
               {formatMessage(message.content)}
-              {isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />}
+              {isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" />}
             </div>
           )}
         </div>
@@ -142,10 +148,16 @@ function App(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review'>('progress')
+  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review' | 'agent'>('progress')
   const [pendingCount, setPendingCount] = useState(0)
   const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(null)
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Agent mode state
+  const { mode: agentMode, status: agentStatus } = useAgentStore()
+  const isAgentMode = agentMode === 'agent'
 
   const {
     folders,
@@ -165,6 +177,15 @@ function App(): JSX.Element {
     completeTask
   } = useAppStore()
 
+  // Switch to agent tab when entering agent mode
+  useEffect(() => {
+    if (isAgentMode) {
+      setActiveTab('agent')
+    } else if (activeTab === 'agent') {
+      setActiveTab('progress')
+    }
+  }, [isAgentMode, activeTab])
+
   useEffect(() => {
     const checkAgent = async () => {
       const ready = await window.api.agent.isReady()
@@ -173,12 +194,36 @@ function App(): JSX.Element {
     checkAgent()
   }, [])
 
+  // Check Google connection status
+  useEffect(() => {
+    const checkGoogle = async () => {
+      try {
+        const initialized = await window.api.google.isInitialized()
+        if (initialized) {
+          const signedIn = await window.api.google.isSignedIn()
+          setIsGoogleConnected(signedIn)
+        }
+      } catch (err) {
+        console.error('Failed to check Google status:', err)
+      }
+    }
+    checkGoogle()
+
+    const unsubSignedIn = window.api.google.onSignedIn(() => setIsGoogleConnected(true))
+    const unsubSignedOut = window.api.google.onSignedOut(() => setIsGoogleConnected(false))
+
+    return () => {
+      unsubSignedIn()
+      unsubSignedOut()
+    }
+  }, [])
+
   useEffect(() => {
     const checkPending = async () => {
       try {
         const count = await window.api.pending.getCount()
         setPendingCount(count)
-        if (count > 0 && activeTab !== 'review') {
+        if (count > 0 && activeTab !== 'review' && activeTab !== 'agent') {
           setActiveTab('review')
         }
       } catch (err) {
@@ -194,10 +239,12 @@ function App(): JSX.Element {
     const unsubNewAction = window.api.pending.onNewAction((action) => {
       console.log('[UI] New pending action:', action.fileName)
       setPendingCount((prev) => prev + 1)
-      setActiveTab('review')
+      if (!isAgentMode) {
+        setActiveTab('review')
+      }
     })
     return () => unsubNewAction()
-  }, [])
+  }, [isAgentMode])
 
   useEffect(() => {
     const unsubFsChanged = window.api.fs.onChanged(async () => {
@@ -286,10 +333,10 @@ function App(): JSX.Element {
     setSelectedFile(entry)
   }
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isProcessing) return
+  const handleSendMessage = async (messageOverride?: string) => {
+    const userMessage = messageOverride || inputValue.trim()
+    if (!userMessage || isProcessing) return
 
-    const userMessage = inputValue.trim()
     setInputValue('')
     setStreamingContent('')
     setIsStreaming(true)
@@ -334,18 +381,27 @@ function App(): JSX.Element {
     }
   }
 
+  const handleTemplateSelect = (command: string) => {
+    handleSendMessage(command)
+  }
+
   const hasAnyFolder = folders.length > 0
 
   return (
-    <div className="h-screen flex flex-col bg-slate-900">
+    <div className={`h-screen flex flex-col bg-slate-900 ${isAgentMode ? 'agent-mode theme-transition' : 'theme-transition'}`}>
       {/* Header */}
-      <header className="h-12 bg-slate-800 border-b border-slate-700 flex items-center px-4 drag-region">
+      <header className={`h-12 bg-slate-800 border-b border-slate-700 flex items-center px-4 drag-region ${isAgentMode ? 'header-accent' : ''}`}>
         <div className="flex items-center gap-2 no-drag">
-          <Zap className="w-5 h-5 text-sky-500" />
+          <Zap className={`w-5 h-5 ${isAgentMode ? 'text-emerald-500' : 'text-sky-500'}`} />
           <span className="font-semibold text-slate-100">Momentum</span>
         </div>
 
         <div className="ml-auto flex items-center gap-4 no-drag">
+          {/* Agent Mode Toggle */}
+          <AgentModeToggle />
+          
+          <div className="w-px h-5 bg-slate-700" />
+          
           <GoogleSignIn />
           <div className="w-px h-5 bg-slate-700" />
           <div className={`flex items-center gap-1.5 text-xs ${isAgentReady ? 'text-emerald-400' : 'text-amber-400'}`}>
@@ -386,7 +442,7 @@ function App(): JSX.Element {
             {!isLoading && folders.length === 0 && (
               <div className="p-4 text-center">
                 <p className="text-sm text-slate-500 mb-3">No folder selected</p>
-                <button onClick={handleSelectFolder} className="text-sm text-sky-400 hover:text-sky-300">
+                <button onClick={handleSelectFolder} className="text-sm text-accent hover:text-accent-light">
                   + Add a folder
                 </button>
               </div>
@@ -395,7 +451,7 @@ function App(): JSX.Element {
             {folders.map((folder) => (
               <div key={folder.path} className="border-b border-slate-700/50">
                 <div className="flex items-center gap-2 px-3 py-2 bg-slate-750 hover:bg-slate-700/30 group">
-                  <FolderOpen className="w-4 h-4 text-sky-400 flex-shrink-0" />
+                  <FolderOpen className={`w-4 h-4 flex-shrink-0 ${isAgentMode ? 'text-emerald-400' : 'text-sky-400'}`} />
                   <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>
                     {folder.name}
                   </span>
@@ -412,8 +468,8 @@ function App(): JSX.Element {
           </div>
 
           {selectedFile && (
-            <div className="p-2 border-t border-slate-700 bg-sky-900/20">
-              <div className="text-xs text-sky-300 truncate" title={selectedFile.path}>
+            <div className={`p-2 border-t border-slate-700 ${isAgentMode ? 'bg-emerald-900/20' : 'bg-sky-900/20'}`}>
+              <div className={`text-xs truncate ${isAgentMode ? 'text-emerald-300' : 'text-sky-300'}`} title={selectedFile.path}>
                 <span className="text-slate-400">Selected: </span>
                 {selectedFile.name}
               </div>
@@ -431,25 +487,27 @@ function App(): JSX.Element {
         </aside>
 
         {/* Chat */}
-        <main className="flex-1 flex flex-col bg-slate-900">
+        <main className={`flex-1 flex flex-col ${isAgentMode ? 'agent-bg' : 'bg-slate-900'}`}>
           <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-3xl mx-auto space-y-4">
               {messages.length === 0 && !isStreaming ? (
                 <div className="text-center py-12">
-                  <Zap className="w-12 h-12 text-sky-500 mx-auto mb-4" />
+                  <Zap className={`w-12 h-12 mx-auto mb-4 ${isAgentMode ? 'text-emerald-500' : 'text-sky-500'}`} />
                   <h1 className="text-2xl font-bold text-slate-100 mb-2">
-                    {hasAnyFolder ? 'Ready to help!' : 'Welcome to Momentum'}
+                    {isAgentMode ? 'Agent Mode Active' : hasAnyFolder ? 'Ready to help!' : 'Welcome to Momentum'}
                   </h1>
                   <p className="text-slate-400 mb-6">
-                    {hasAnyFolder
+                    {isAgentMode
+                      ? 'Configure the watcher in the right panel to automatically process files.'
+                      : hasAnyFolder
                       ? `${folders.length} folder${folders.length > 1 ? 's' : ''} loaded. Ask me to organize, extract data, or create reports.`
                       : 'Your AI-powered desktop assistant. Grant folder access to get started.'}
                   </p>
-                  {!hasAnyFolder && (
+                  {!hasAnyFolder && !isAgentMode && (
                     <>
                       <button
                         onClick={handleSelectFolder}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-medium transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg font-medium transition-colors"
                       >
                         <FolderOpen className="w-4 h-4" />
                         Select Folder
@@ -485,13 +543,13 @@ function App(): JSX.Element {
                           <div className="px-4 py-2 bg-slate-800 rounded-lg text-sm text-slate-100">
                             <div className="space-y-1">
                               {formatMessage(streamingContent)}
-                              <span className="inline-block w-2 h-4 ml-1 bg-sky-400 animate-pulse" />
+                              <span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" />
                             </div>
                           </div>
                         ) : (
                           currentClassification && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-                              <span className="w-2 h-2 bg-sky-500 rounded-full animate-pulse" />
+                              <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
                               <span className="text-sm text-slate-400">Executing...</span>
                             </div>
                           )
@@ -505,9 +563,29 @@ function App(): JSX.Element {
             </div>
           </div>
 
-          {/* Input */}
+          {/* Input with Templates */}
           <div className="border-t border-slate-700 p-4">
             <div className="max-w-3xl mx-auto">
+              {/* Task Templates */}
+              {hasAnyFolder && !isAgentMode && (
+                <div className="mb-2">
+                  <button
+                    onClick={() => setShowTemplates(!showTemplates)}
+                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-400 mb-1"
+                  >
+                    {showTemplates ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    Quick Actions
+                  </button>
+                  {showTemplates && (
+                    <TaskTemplates
+                      onSelectTemplate={handleTemplateSelect}
+                      disabled={isProcessing}
+                      isGoogleConnected={isGoogleConnected}
+                    />
+                  )}
+                </div>
+              )}
+              
               <div className="bg-slate-800 rounded-lg border border-slate-700 flex items-center">
                 <input
                   type="text"
@@ -515,19 +593,21 @@ function App(): JSX.Element {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={
-                    hasAnyFolder
+                    isAgentMode
+                      ? 'Agent mode active - configure watcher in right panel'
+                      : hasAnyFolder
                       ? selectedFile
                         ? `Ask about ${selectedFile.name}...`
                         : 'Ask Momentum to organize files, extract data, create reports...'
                       : 'Select a folder to get started...'
                   }
-                  disabled={!hasAnyFolder || isProcessing}
+                  disabled={!hasAnyFolder || isProcessing || isAgentMode}
                   className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
                 />
                 <button
-                  onClick={handleSendMessage}
-                  disabled={!hasAnyFolder || !inputValue.trim() || isProcessing}
-                  className="p-2 m-1.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-md transition-colors"
+                  onClick={() => handleSendMessage()}
+                  disabled={!hasAnyFolder || !inputValue.trim() || isProcessing || isAgentMode}
+                  className="p-2 m-1.5 bg-accent hover:bg-accent-dark disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-md transition-colors"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -537,52 +617,74 @@ function App(): JSX.Element {
         </main>
 
         {/* Right Panel */}
-        <aside className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col">
-          <div className="flex border-b border-slate-700">
-            <button
-              onClick={() => setActiveTab('progress')}
-              className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
-                activeTab === 'progress' ? 'text-slate-200 border-b-2 border-sky-500' : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              Progress
-            </button>
-            <button
-              onClick={() => setActiveTab('review')}
-              className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${
-                activeTab === 'review' ? 'text-slate-200 border-b-2 border-sky-500' : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              Review
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('metrics')}
-              className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
-                activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-sky-500' : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              Stats
-            </button>
+        <aside className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col overflow-hidden">
+          <div className="flex border-b border-slate-700 flex-shrink-0">
+            {!isAgentMode && (
+              <>
+                <button
+                  onClick={() => setActiveTab('progress')}
+                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
+                    activeTab === 'progress' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Progress
+                </button>
+                <button
+                  onClick={() => setActiveTab('review')}
+                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${
+                    activeTab === 'review' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Review
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab('metrics')}
+                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
+                    activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Stats
+                </button>
+              </>
+            )}
+            {isAgentMode && (
+              <div className="flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide text-emerald-400 flex items-center gap-2">
+                <Bot className="w-4 h-4" />
+                <span>Agent Control</span>
+                {agentStatus === 'running' && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 status-dot-pulse ml-auto" />
+                )}
+              </div>
+            )}
           </div>
 
-          {activeTab === 'progress' && <ProgressPanel />}
-          {activeTab === 'review' && (
-            <ReviewPanel
-              onComplete={async () => {
-                setPendingCount(0)
-                for (const folder of folders) {
-                  const newEntries = await window.api.fs.listDir(folder.path)
-                  useAppStore.getState().updateFolderEntries(folder.path, newEntries)
-                }
-              }}
-            />
-          )}
-          {activeTab === 'metrics' && <MetricsPanel />}
+          {/* Panel Content */}
+          <div className="flex-1 overflow-y-auto">
+            {isAgentMode ? (
+              <AgentPanel />
+            ) : (
+              <>
+                {activeTab === 'progress' && <ProgressPanel />}
+                {activeTab === 'review' && (
+                  <ReviewPanel
+                    onComplete={async () => {
+                      setPendingCount(0)
+                      for (const folder of folders) {
+                        const newEntries = await window.api.fs.listDir(folder.path)
+                        useAppStore.getState().updateFolderEntries(folder.path, newEntries)
+                      }
+                    }}
+                  />
+                )}
+                {activeTab === 'metrics' && <MetricsPanel />}
+              </>
+            )}
+          </div>
         </aside>
       </div>
     </div>
