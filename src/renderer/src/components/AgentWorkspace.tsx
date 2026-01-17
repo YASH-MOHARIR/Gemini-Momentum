@@ -275,7 +275,10 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   const handleBrowseFolder = async () => {
     const folder = await window.api.selectFolder()
     if (folder) {
+      console.log('[WATCHER CARD] Folder selected via Browse:', folder)
       setLocalWatchFolder(folder)
+      // Also update the store immediately for better UX
+      updateWatcherConfig(watcherId, { watchFolder: folder })
     }
   }
 
