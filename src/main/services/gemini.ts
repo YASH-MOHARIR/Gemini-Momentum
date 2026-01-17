@@ -4,6 +4,7 @@ import * as fileSystem from './fileSystem'
 import * as spreadsheet from './spreadsheet'
 import * as fileOrganizer from './fileOrganizer'
 import * as pendingActions from './pendingActions'
+import * as storageAnalyzer from './storageAnalyzer'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -395,6 +396,37 @@ Use this to analyze document contents, read data files, or view code.`,
         }
       },
       required: ['source_path', 'destination_path']
+    }
+  },
+  {
+    name: 'analyze_storage',
+    description: `Analyze disk usage in a folder and provide detailed insights.
+Shows:
+- Total size and file count
+- Breakdown by file type (Videos, Images, Documents, etc.)
+- Largest files (top 20)
+- Old files (older than 6 months)
+- Cleanup suggestions
+
+Use this when user asks about:
+- "What's taking up space?"
+- "Show me large files"
+- "What files can I delete?"
+- "Storage analysis"
+- "Disk usage"`,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'The full absolute path to the folder to analyze'
+        },
+        depth: {
+          type: 'NUMBER',
+          description: 'How many subfolders deep to scan (1-5, default 3). Higher = more thorough but slower.'
+        }
+      },
+      required: ['path']
     }
   },
   {
@@ -1335,6 +1367,41 @@ async function executeTool(
       case 'copy_file':
         result = await fileSystem.copyFile(args.source_path, args.destination_path)
         break
+      case 'analyze_storage': {
+        try {
+          const folderPath = String(args.path)
+          const depth = args.depth ? Number(args.depth) : 3
+          
+          const analysis = await storageAnalyzer.analyzeStorage(folderPath, depth)
+          
+          // Format the response nicely
+          const summary = [
+            `**Storage Analysis Complete**`,
+            ``,
+            `📊 Total: ${storageAnalyzer.formatBytes(analysis.totalSize)} (${analysis.totalFiles} files)`,
+            ``,
+            `**By Type:**`
+          ]
+          
+          analysis.byType.slice(0, 5).forEach(cat => {
+            summary.push(`• ${cat.type}: ${storageAnalyzer.formatBytes(cat.size)} (${cat.percentage.toFixed(1)}%)`)
+          })
+          
+          if (analysis.suggestions.length > 0) {
+            summary.push(``, `**💡 Suggestions:**`)
+            analysis.suggestions.forEach(s => summary.push(`• ${s}`))
+          }
+          
+          result = {
+            success: true,
+            data: analysis,
+            summary: summary.join('\n')
+          }
+        } catch (error) {
+          result = { success: false, error: String(error) }
+        }
+        break
+      }
       case 'analyze_image':
         result = await analyzeImage(args.path, args.prompt)
         break
@@ -1622,6 +1689,7 @@ CAPABILITIES:
 - Analyze images: Extract text from receipts, invoices, screenshots
 - Organize files by type, date, or custom criteria
 - Create reports and summaries
+- Analyze storage usage and suggest cleanup
 
 TOOLS AVAILABLE:
 - list_directory: See files in a folder
@@ -1632,6 +1700,7 @@ TOOLS AVAILABLE:
 - move_file: Move files/folders
 - rename_file: Rename files/folders
 - copy_file: Copy files/folders
+- analyze_storage: Analyze disk usage and get cleanup suggestions
 - analyze_image: Extract text/data from images (receipts, screenshots, etc.)
 - create_spreadsheet: Create Excel files with custom columns and data
 - create_expense_report: Create formatted expense reports from receipt data
