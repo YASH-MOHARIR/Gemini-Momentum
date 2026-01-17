@@ -19,14 +19,18 @@ import {
   Bot,
   Folder,
   MousePointer,
-  Settings
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Trash2
 } from 'lucide-react'
-import { useAgentStore, AgentConfig, AgentRule, ActivityEntry } from '../stores/agentStore'
+import { useAgentStore, AgentConfig, AgentRule, ActivityEntry, WatcherState } from '../stores/agentStore'
 
 // ============ Constants ============
 
 const MAX_RULES = 5
 const MAX_CHARS = 200
+const MAX_WATCHERS = 5
 
 const EXAMPLE_RULES = [
   "PDFs go to Documents folder",
@@ -59,6 +63,10 @@ function formatTimeAgo(timestamp: string): string {
   return `${Math.floor(seconds / 3600)}h ago`
 }
 
+function getFolderName(path: string): string {
+  return path.split(/[/\\]/).pop() || path
+}
+
 // ============ Activity Item Component ============
 
 function ActivityItem({ entry }: { entry: ActivityEntry }) {
@@ -73,37 +81,37 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
   const Icon = config.icon
 
   return (
-    <div className={`p-3 rounded-lg border ${config.bg}`}>
-      <div className="flex items-start gap-3">
-        <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${config.color}`} />
+    <div className={`p-2 rounded-lg border ${config.bg}`}>
+      <div className="flex items-start gap-2">
+        <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${config.color}`} />
         
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-slate-200 truncate" title={entry.originalName}>
+          <div className="text-xs font-medium text-slate-200 truncate" title={entry.originalName}>
             {entry.originalName}
           </div>
           
           {entry.action === 'moved' && entry.destination && (
-            <div className="flex items-center gap-1.5 text-sm text-slate-400 mt-1">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+              <ArrowRight className="w-3 h-3" />
               <span className="truncate">{entry.destination.split(/[/\\]/).slice(-2).join('/')}</span>
             </div>
           )}
           
           {entry.newName && entry.newName !== entry.originalName && (
-            <div className="text-sm text-emerald-400/80 mt-1 truncate" title={entry.newName}>
-              Renamed: {entry.newName}
+            <div className="text-xs text-emerald-400/80 mt-0.5 truncate" title={entry.newName}>
+              → {entry.newName}
             </div>
           )}
           
           {entry.error && (
-            <div className="text-sm text-red-400/80 mt-1">{entry.error}</div>
+            <div className="text-xs text-red-400/80 mt-0.5">{entry.error}</div>
           )}
           
-          <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
             {entry.matchedRule && <span>Rule #{entry.matchedRule}</span>}
             {entry.usedAI && (
-              <span className="flex items-center gap-1 text-emerald-500">
-                <Bot className="w-3 h-3" /> AI Vision
+              <span className="flex items-center gap-0.5 text-emerald-500">
+                <Bot className="w-3 h-3" /> AI
               </span>
             )}
             <span className="ml-auto">{formatTimeAgo(entry.timestamp)}</span>
@@ -114,155 +122,468 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
   )
 }
 
-// ============ Main Component ============
+// ============ Watcher Card Component ============
 
-export default function AgentWorkspace() {
+function WatcherCard({ watcherId }: { watcherId: string }) {
   const {
-    status,
-    config,
-    stats,
-    recentActivity,
-    folderSelectMode,
-    setStatus,
-    setConfig,
-    updateConfig,
-    incrementStat,
-    addActivity,
-    reset,
+    watchers,
+    setWatcherStatus,
+    updateWatcherConfig,
+    removeWatcher,
     startFolderSelect,
-    cancelFolderSelect,
-    getRunningDuration
+    getWatcherDuration,
+    folderSelectMode,
+    selectingForWatcherId
   } = useAgentStore()
 
-  // Local form state
-  const [watchFolder, setWatchFolder] = useState('')
-  const [rules, setRules] = useState<AgentRule[]>([
-    { id: '1', text: '', enabled: true, order: 1 }
-  ])
-  const [enableLog, setEnableLog] = useState(true)
+  const watcher = watchers.get(watcherId)
+  if (!watcher) return null
+
+  const { config, status, stats, recentActivity } = watcher
+
+  const [isExpanded, setIsExpanded] = useState(status === 'running' || status === 'idle')
+  const [isEditing, setIsEditing] = useState(status === 'idle' && !config.watchFolder)
+  const [localRules, setLocalRules] = useState<AgentRule[]>(
+    config.rules.length > 0 ? config.rules : [{ id: '1', text: '', enabled: true, order: 1 }]
+  )
+  const [localWatchFolder, setLocalWatchFolder] = useState(config.watchFolder)
+  const [enableLog, setEnableLog] = useState(config.enableActivityLog !== undefined ? config.enableActivityLog : true)
   const [duration, setDuration] = useState(0)
 
-  // Load existing config
-  useEffect(() => {
-    if (config) {
-      setWatchFolder(config.watchFolder || '')
-      if (config.rules && config.rules.length > 0) {
-        setRules(config.rules)
-      }
-      setEnableLog(config.enableActivityLog ?? true)
-    }
-  }, [config])
+  const isRunning = status === 'running' || status === 'paused'
+  const isPaused = status === 'paused'
+  const isSelecting = folderSelectMode !== 'none' && selectingForWatcherId === watcherId
 
-  // Sync watch folder from folder selection
+  // Sync folder from store when selection completes
   useEffect(() => {
-    if (config?.watchFolder && config.watchFolder !== watchFolder) {
-      setWatchFolder(config.watchFolder)
+    const storeWatcher = watchers.get(watcherId)
+    if (storeWatcher && storeWatcher.config.watchFolder !== localWatchFolder) {
+      setLocalWatchFolder(storeWatcher.config.watchFolder)
     }
-  }, [config?.watchFolder])
+  }, [watchers, watcherId, localWatchFolder])
 
-  // Update duration every second
+  // Update duration
   useEffect(() => {
     if (status !== 'running') return
     const interval = setInterval(() => {
-      setDuration(getRunningDuration())
+      setDuration(getWatcherDuration(watcherId))
     }, 1000)
     return () => clearInterval(interval)
-  }, [status, getRunningDuration])
+  }, [status, watcherId, getWatcherDuration])
 
-  // ============ Handlers ============
-
-  const handleSelectWatchFolder = async () => {
-    // Option 1: Use native dialog
-    const folder = await window.api.selectFolder()
-    if (folder) {
-      setWatchFolder(folder)
-      updateConfig({ watchFolder: folder })
-    }
-  }
-
-  const handleClickToSelectWatch = () => {
-    startFolderSelect('watch')
-  }
-
-  const addRule = () => {
-    if (rules.length >= MAX_RULES) return
-    const newRule: AgentRule = {
-      id: Date.now().toString(),
-      text: '',
-      enabled: true,
-      order: rules.length + 1
-    }
-    setRules([...rules, newRule])
-  }
-
-  const updateRuleText = (id: string, text: string) => {
-    setRules(rules.map(r => 
-      r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r
-    ))
-  }
-
-  const removeRule = (id: string) => {
-    if (rules.length <= 1) return
-    setRules(rules.filter(r => r.id !== id))
-  }
-
-  const useExample = (index: number) => {
-    const emptyRule = rules.find(r => !r.text.trim())
-    if (emptyRule) {
-      updateRuleText(emptyRule.id, EXAMPLE_RULES[index])
-    } else if (rules.length < MAX_RULES) {
-      const newRule: AgentRule = {
-        id: Date.now().toString(),
-        text: EXAMPLE_RULES[index],
-        enabled: true,
-        order: rules.length + 1
+  // Listen for watcher events
+  useEffect(() => {
+    const unsubProcessed = window.api.watcher.onFileProcessed((id, entry) => {
+      if (id === watcherId) {
+        useAgentStore.getState().addWatcherActivity(watcherId, entry)
+        useAgentStore.getState().incrementWatcherStat(watcherId, 'filesProcessed')
+        if (entry.usedAI) {
+          useAgentStore.getState().incrementWatcherStat(watcherId, 'aiCalls')
+        }
+        if (entry.action === 'error') {
+          useAgentStore.getState().incrementWatcherStat(watcherId, 'errors')
+        }
       }
-      setRules([...rules, newRule])
-    }
-  }
+    })
+    return () => unsubProcessed()
+  }, [watcherId])
 
   const handleStart = async () => {
-    const activeRules = rules.filter(r => r.text.trim())
-    if (!watchFolder || activeRules.length === 0) return
-
-    const logPath = watchFolder + (watchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
-
-    const newConfig: AgentConfig = {
-      watchFolder,
-      rules: activeRules.map((r, i) => ({ ...r, order: i + 1 })),
-      enableActivityLog: enableLog,
-      logPath
-    }
-
-    const result = await window.api.watcher.start(newConfig)
+    // Make sure config is up to date with local state
+    const activeRules = localRules.filter(r => r.text.trim())
+    const logPath = localWatchFolder + (localWatchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
     
+    const startConfig: AgentConfig = {
+      id: watcherId,
+      watchFolder: localWatchFolder,
+      rules: activeRules,
+      enableActivityLog: enableLog,
+      logPath: enableLog ? logPath : ''
+    }
+    
+    const result = await window.api.watcher.start(startConfig)
     if (result.success) {
-      setConfig(newConfig)
-      setStatus('running')
+      // Update store with final config
+      updateWatcherConfig(watcherId, startConfig)
+      setWatcherStatus(watcherId, 'running')
+      setIsExpanded(true)
+      setIsEditing(false)
     } else {
       alert(`Failed to start: ${result.error}`)
     }
   }
 
   const handlePause = async () => {
-    if (status === 'paused') {
-      await window.api.watcher.resume()
-      setStatus('running')
+    if (isPaused) {
+      await window.api.watcher.resume(watcherId)
+      setWatcherStatus(watcherId, 'running')
     } else {
-      await window.api.watcher.pause()
-      setStatus('paused')
+      await window.api.watcher.pause(watcherId)
+      setWatcherStatus(watcherId, 'paused')
     }
   }
 
   const handleStop = async () => {
-    await window.api.watcher.stop()
-    reset()
+    await window.api.watcher.stop(watcherId)
+    setWatcherStatus(watcherId, 'idle')
+    setIsExpanded(false)
   }
 
-  const isRunning = status === 'running' || status === 'paused'
-  const isPaused = status === 'paused'
-  const canStart = watchFolder && rules.some(r => r.text.trim())
+  const handleDelete = async () => {
+    if (confirm(`Delete this watcher for ${getFolderName(config.watchFolder)}?`)) {
+      if (isRunning) {
+        await window.api.watcher.stop(watcherId)
+      }
+      removeWatcher(watcherId)
+    }
+  }
+
+  const handleSaveConfig = () => {
+    const activeRules = localRules.filter(r => r.text.trim())
+    const logPath = localWatchFolder + (localWatchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
+    
+    updateWatcherConfig(watcherId, {
+      watchFolder: localWatchFolder,
+      rules: activeRules,
+      enableActivityLog: enableLog,
+      logPath: enableLog ? logPath : ''
+    })
+    setIsEditing(false)
+  }
+
+  const addRule = () => {
+    if (localRules.length >= MAX_RULES) return
+    setLocalRules([...localRules, {
+      id: Date.now().toString(),
+      text: '',
+      enabled: true,
+      order: localRules.length + 1
+    }])
+  }
+
+  const updateRuleText = (id: string, text: string) => {
+    setLocalRules(localRules.map(r => 
+      r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r
+    ))
+  }
+
+  const removeRule = (id: string) => {
+    if (localRules.length <= 1) return
+    setLocalRules(localRules.filter(r => r.id !== id))
+  }
+
+  const handleBrowseFolder = async () => {
+    const folder = await window.api.selectFolder()
+    if (folder) {
+      setLocalWatchFolder(folder)
+    }
+  }
+
+  const useExample = (index: number) => {
+    const emptyRule = localRules.find(r => !r.text.trim())
+    if (emptyRule) {
+      updateRuleText(emptyRule.id, EXAMPLE_RULES[index])
+    } else if (localRules.length < MAX_RULES) {
+      setLocalRules([...localRules, {
+        id: Date.now().toString(),
+        text: EXAMPLE_RULES[index],
+        enabled: true,
+        order: localRules.length + 1
+      }])
+    }
+  }
+
+  const canStart = localWatchFolder && localRules.some(r => r.text.trim())
+
+  return (
+    <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+      {/* Header */}
+      <div 
+        className="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-700/30 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <button className="text-slate-400 hover:text-slate-200">
+          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+        
+        <FolderOpen className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+        
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-slate-200 truncate">
+            {localWatchFolder ? getFolderName(localWatchFolder) : 'New Watcher'}
+          </div>
+          <div className="text-xs text-slate-500">
+            {config.rules.filter(r => r.text.trim()).length} rule{config.rules.filter(r => r.text.trim()).length !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        {/* Status indicator */}
+        <div className="flex items-center gap-2">
+          {isRunning && (
+            <>
+              <span className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+              <span className="text-xs text-slate-400">
+                {isPaused ? 'Paused' : 'Running'}
+              </span>
+            </>
+          )}
+          {!isRunning && (
+            <span className="text-xs text-slate-500">Idle</span>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {!isRunning ? (
+            <>
+              <button
+                onClick={handleStart}
+                disabled={!canStart}
+                className="p-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white transition-colors"
+                title="Start"
+              >
+                <Play className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
+                title="Edit configuration"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDelete}
+                className="p-1.5 rounded-md hover:bg-red-900/30 text-slate-400 hover:text-red-400 transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handlePause}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isPaused
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    : 'bg-amber-600 hover:bg-amber-500 text-white'
+                }`}
+                title={isPaused ? 'Resume' : 'Pause'}
+              >
+                <Pause className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleStop}
+                className="p-1.5 rounded-md bg-red-600 hover:bg-red-500 text-white transition-colors"
+                title="Stop"
+              >
+                <Square className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="border-t border-slate-700">
+          {/* Stats (when running) */}
+          {isRunning && (
+            <div className="p-3 bg-emerald-900/10 grid grid-cols-4 gap-2">
+              <div className="text-center">
+                <div className="text-sm font-bold text-slate-200">{formatDuration(duration)}</div>
+                <div className="text-xs text-slate-500">Time</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-bold text-slate-200">{stats.filesProcessed}</div>
+                <div className="text-xs text-slate-500">Files</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-bold text-slate-200">{stats.aiCalls}</div>
+                <div className="text-xs text-slate-500">AI</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-bold text-slate-200">{stats.errors}</div>
+                <div className="text-xs text-slate-500">Errors</div>
+              </div>
+            </div>
+          )}
+
+          {/* Config Editor (when editing) */}
+          {isEditing && !isRunning && (
+            <div className="p-3 space-y-3 bg-slate-900/30">
+              {/* Helper text for new watchers */}
+              {!localWatchFolder && (
+                <div className="p-2 bg-emerald-900/20 border border-emerald-800/30 rounded text-xs text-emerald-300">
+                  <strong>Getting Started:</strong> Select a folder to watch, add rules describing what should happen to files, then click Start.
+                </div>
+              )}
+              
+              {/* Watch Folder */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-400">Watch Folder</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 truncate" title={localWatchFolder}>
+                    {localWatchFolder || 'No folder selected'}
+                  </div>
+                  <button
+                    onClick={() => startFolderSelect('watch', watcherId)}
+                    className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded transition-colors flex items-center gap-1"
+                    title="Click a folder in the sidebar"
+                  >
+                    <MousePointer className="w-3 h-3" />
+                    Click
+                  </button>
+                  <button
+                    onClick={handleBrowseFolder}
+                    className="px-2 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded transition-colors"
+                  >
+                    Browse
+                  </button>
+                </div>
+              </div>
+
+              {/* Rules */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-400">
+                  Rules ({localRules.filter(r => r.text.trim()).length}/{MAX_RULES})
+                </label>
+                {localRules.map((rule, index) => (
+                  <div key={rule.id} className="flex items-start gap-2">
+                    <div className="pt-1 text-xs font-medium text-slate-500 w-4">
+                      {index + 1}.
+                    </div>
+                    <textarea
+                      value={rule.text}
+                      onChange={(e) => updateRuleText(rule.id, e.target.value)}
+                      placeholder="Describe what should happen..."
+                      rows={1}
+                      className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-emerald-500"
+                    />
+                    {localRules.length > 1 && (
+                      <button
+                        onClick={() => removeRule(rule.id)}
+                        className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {localRules.length < MAX_RULES && (
+                  <button
+                    onClick={addRule}
+                    className="flex items-center gap-1 px-2 py-1 w-full rounded border border-dashed border-slate-600 text-slate-400 hover:text-emerald-400 hover:border-emerald-600 transition-colors text-xs"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Rule
+                  </button>
+                )}
+              </div>
+
+              {/* Example Rules */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 text-xs text-slate-500">
+                  <Lightbulb className="w-3 h-3 text-amber-500" />
+                  <span>Quick add examples:</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {EXAMPLE_RULES.map((example, i) => (
+                    <button
+                      key={i}
+                      onClick={() => useExample(i)}
+                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-slate-200 text-xs rounded transition-colors"
+                    >
+                      {example.length > 20 ? example.slice(0, 20) + '...' : example}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Activity Log Toggle */}
+              <div className="flex items-center gap-2 py-1">
+                <input
+                  type="checkbox"
+                  id={`enableLog-${watcherId}`}
+                  checked={enableLog}
+                  onChange={(e) => setEnableLog(e.target.checked)}
+                  className="w-3 h-3 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+                />
+                <label htmlFor={`enableLog-${watcherId}`} className="text-xs text-slate-300">
+                  Save activity log (Excel in watch folder)
+                </label>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={!canStart}
+                  className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm rounded transition-colors"
+                >
+                  Save Configuration
+                </button>
+                {config.watchFolder && (
+                  <button
+                    onClick={() => {
+                      setLocalRules(config.rules.length > 0 ? config.rules : [{ id: '1', text: '', enabled: true, order: 1 }])
+                      setLocalWatchFolder(config.watchFolder)
+                      setEnableLog(config.enableActivityLog !== undefined ? config.enableActivityLog : true)
+                      setIsEditing(false)
+                    }}
+                    className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Activity Feed (when running) */}
+          {isRunning && (
+            <div className="p-3 max-h-48 overflow-y-auto space-y-2">
+              {recentActivity.length === 0 ? (
+                <div className="text-center py-4 text-xs text-slate-500">
+                  Waiting for files...
+                </div>
+              ) : (
+                recentActivity.slice(0, 10).map((entry) => (
+                  <ActivityItem key={entry.id} entry={entry} />
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============ Main Component ============
+
+export default function AgentWorkspace() {
+  const {
+    watchers,
+    createWatcher,
+    canAddWatcher,
+    folderSelectMode,
+    cancelFolderSelect
+  } = useAgentStore()
+
+  const watcherIds = Array.from(watchers.keys())
   const isSelectingFolder = folderSelectMode !== 'none'
+
+  const handleCreateWatcher = () => {
+    const newId = `watcher-${Date.now()}`
+    const newConfig: AgentConfig = {
+      id: newId,
+      watchFolder: '',
+      rules: [{ id: '1', text: '', enabled: true, order: 1 }],
+      enableActivityLog: true,
+      logPath: ''
+    }
+    createWatcher(newConfig)
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-900/50 overflow-hidden">
@@ -272,10 +593,7 @@ export default function AgentWorkspace() {
           <div className="flex items-center gap-2">
             <MousePointer className="w-4 h-4" />
             <span className="font-medium">
-              {folderSelectMode === 'watch' 
-                ? 'Click a folder in the sidebar to set as watch folder'
-                : 'Click a folder to set as destination'
-              }
+              Click a folder in the sidebar to set as watch folder
             </span>
           </div>
           <button
@@ -288,262 +606,57 @@ export default function AgentWorkspace() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-        {/* Left Column: Setup/Config */}
-        <div className="w-1/2 flex flex-col bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-          <div className="p-4 border-b border-slate-700 bg-slate-800/80">
-            <h2 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              {isRunning ? 'Agent Configuration' : 'Setup Agent'}
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {isRunning ? 'Currently watching for new files' : 'Configure folder and rules to start'}
-            </p>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-5">
-            {/* Watch Folder */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
-                <FolderOpen className="w-4 h-4 text-emerald-500" />
-                Watch Folder
-              </label>
-              
-              <div className="flex gap-2">
-                <div 
-                  className={`
-                    flex-1 px-3 py-2.5 rounded-lg text-sm truncate
-                    ${watchFolder 
-                      ? 'bg-slate-900 text-slate-200 border border-slate-600' 
-                      : 'bg-slate-900/50 text-slate-500 border border-dashed border-slate-600'
-                    }
-                    ${isRunning ? 'opacity-60' : ''}
-                  `}
-                  title={watchFolder}
-                >
-                  {watchFolder || 'No folder selected'}
-                </div>
-                {!isRunning && (
-                  <>
-                    <button
-                      onClick={handleClickToSelectWatch}
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5"
-                      title="Click a folder in the sidebar"
-                    >
-                      <MousePointer className="w-4 h-4" />
-                      Click
-                    </button>
-                    <button
-                      onClick={handleSelectWatchFolder}
-                      className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition-colors"
-                    >
-                      Browse
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Rules */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
-                  <FileText className="w-4 h-4 text-emerald-500" />
-                  Rules ({rules.filter(r => r.text.trim()).length}/{MAX_RULES})
-                </label>
-              </div>
-
-              <div className="space-y-2">
-                {rules.map((rule, index) => (
-                  <div key={rule.id} className="flex items-start gap-2">
-                    <div className="pt-2.5 text-sm font-medium text-slate-500 w-6">
-                      {index + 1}.
-                    </div>
-                    <div className="flex-1">
-                      <textarea
-                        value={rule.text}
-                        onChange={(e) => updateRuleText(rule.id, e.target.value)}
-                        placeholder="Describe what should happen to files..."
-                        rows={2}
-                        disabled={isRunning}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-emerald-500 disabled:opacity-60"
-                      />
-                      <div className="text-xs text-slate-600 mt-1 text-right">
-                        {rule.text.length}/{MAX_CHARS}
-                      </div>
-                    </div>
-                    {!isRunning && (
-                      <button
-                        onClick={() => removeRule(rule.id)}
-                        disabled={rules.length <= 1}
-                        className="p-1.5 mt-1.5 rounded-md text-slate-500 hover:text-red-400 hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {!isRunning && rules.length < MAX_RULES && (
-                <button
-                  onClick={addRule}
-                  className="flex items-center gap-2 px-3 py-2 w-full rounded-lg border border-dashed border-slate-600 text-slate-400 hover:text-emerald-400 hover:border-emerald-600 transition-colors text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Rule
-                </button>
-              )}
-            </div>
-
-            {/* Example Rules */}
-            {!isRunning && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Quick add examples:</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {EXAMPLE_RULES.map((example, i) => (
-                    <button
-                      key={i}
-                      onClick={() => useExample(i)}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-slate-200 text-xs rounded-md transition-colors"
-                    >
-                      {example.length > 25 ? example.slice(0, 25) + '...' : example}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Activity Log Toggle */}
-            <div className="flex items-center gap-3 py-2">
-              <input
-                type="checkbox"
-                id="enableLog"
-                checked={enableLog}
-                onChange={(e) => setEnableLog(e.target.checked)}
-                disabled={isRunning}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
-              />
-              <label htmlFor="enableLog" className="text-sm text-slate-300">
-                Save activity log (Excel in watch folder)
-              </label>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="p-4 border-t border-slate-700 bg-slate-800/80">
-            {!isRunning ? (
-              <button
-                onClick={handleStart}
-                disabled={!canStart}
-                className={`
-                  w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
-                  ${canStart
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30'
-                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                  }
-                `}
-              >
-                <Play className="w-5 h-5" />
-                Start Watching
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={handlePause}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors ${
-                    isPaused
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                      : 'bg-amber-600 hover:bg-amber-500 text-white'
-                  }`}
-                >
-                  <Pause className="w-5 h-5" />
-                  {isPaused ? 'Resume' : 'Pause'}
-                </button>
-                <button
-                  onClick={handleStop}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
-                >
-                  <Square className="w-5 h-5" />
-                  Stop
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Activity & Stats */}
-        <div className="w-1/2 flex flex-col bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-          {/* Stats Header */}
-          <div className="p-4 border-b border-slate-700 bg-emerald-900/20">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
-                <FileCheck className="w-5 h-5" />
-                Activity
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="max-w-4xl mx-auto space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-emerald-400 flex items-center gap-2">
+                <Bot className="w-6 h-6" />
+                AI Agents ({watcherIds.length}/{MAX_WATCHERS})
               </h2>
-              {isRunning && (
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
-                  <span className="text-sm text-slate-400">
-                    {isPaused ? 'Paused' : 'Running'}
-                  </span>
-                </div>
-              )}
+              <p className="text-sm text-slate-500 mt-1">
+                Create up to {MAX_WATCHERS} autonomous file watchers
+              </p>
             </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-4 gap-3">
-              <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-                <Clock className="w-5 h-5 text-slate-400 mx-auto mb-1" />
-                <div className="text-xl font-bold text-slate-200">{formatDuration(duration)}</div>
-                <div className="text-xs text-slate-500">Running</div>
-              </div>
-              <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-                <FileCheck className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
-                <div className="text-xl font-bold text-slate-200">{stats.filesProcessed}</div>
-                <div className="text-xs text-slate-500">Processed</div>
-              </div>
-              <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-                <Cpu className="w-5 h-5 text-sky-400 mx-auto mb-1" />
-                <div className="text-xl font-bold text-slate-200">{stats.aiCalls}</div>
-                <div className="text-xs text-slate-500">AI Calls</div>
-              </div>
-              <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-                <AlertCircle className="w-5 h-5 text-red-400 mx-auto mb-1" />
-                <div className="text-xl font-bold text-slate-200">{stats.errors}</div>
-                <div className="text-xs text-slate-500">Errors</div>
-              </div>
-            </div>
+            
+            <button
+              onClick={handleCreateWatcher}
+              disabled={!canAddWatcher()}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              New Watcher
+            </button>
           </div>
 
-          {/* Activity Feed */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {recentActivity.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mb-4">
-                  <Folder className="w-8 h-8 text-slate-500" />
-                </div>
-                <h3 className="text-lg font-medium text-slate-400 mb-1">
-                  {isRunning ? 'Waiting for files...' : 'No activity yet'}
-                </h3>
-                <p className="text-sm text-slate-500 max-w-xs">
-                  {isRunning 
-                    ? 'Drop files into the watch folder to see them processed here'
-                    : 'Start the agent to begin watching for files'
-                  }
-                </p>
+          {/* Watcher List */}
+          {watcherIds.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mb-4">
+                <Folder className="w-8 h-8 text-slate-500" />
               </div>
-            ) : (
-              <div className="space-y-3">
-                {recentActivity.map((entry) => (
-                  <ActivityItem key={entry.id} entry={entry} />
-                ))}
-              </div>
-            )}
-          </div>
+              <h3 className="text-lg font-medium text-slate-400 mb-1">
+                No Watchers Yet
+              </h3>
+              <p className="text-sm text-slate-500 max-w-md mb-4">
+                Create your first AI agent to start automatically organizing files
+              </p>
+              <button
+                onClick={handleCreateWatcher}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Create First Watcher
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {watcherIds.map((watcherId) => (
+                <WatcherCard key={watcherId} watcherId={watcherId} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
