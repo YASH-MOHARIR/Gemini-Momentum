@@ -13,12 +13,14 @@ import {
   Cpu,
   ChevronDown,
   ChevronUp,
-  MessageSquare
+  MessageSquare,
+  HardDrive
 } from 'lucide-react'
 import FileTree from './components/FileTree'
 import ProgressPanel from './components/ProgressPanel'
 import MetricsPanel from './components/MetricsPanel'
 import ReviewPanel from './components/ReviewPanel'
+import StoragePanel from './components/StoragePanel'
 import GoogleSignIn from './components/GoogleSignIn'
 import TaskTemplates from './components/TaskTemplates'
 import AgentWorkspace from './components/AgentWorkspace'
@@ -169,7 +171,7 @@ function App(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review'>('progress')
+  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review' | 'storage'>('progress')
   const [pendingCount, setPendingCount] = useState(0)
   const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(null)
   const [isGoogleConnected, setIsGoogleConnected] = useState(false)
@@ -180,9 +182,9 @@ function App(): JSX.Element {
   const isAgentMode = agentMode === 'agent'
 
   const {
-    folders, selectedFile, messages, isProcessing, isAgentReady,
+    folders, selectedFile, messages, isProcessing, isAgentReady, storageAnalysis,
     addFolder, removeFolder, setSelectedFile, addMessage, setProcessing,
-    setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask
+    setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask, setStorageAnalysis
   } = useAppStore()
 
   const handleModeChange = (mode: 'chat' | 'agent') => {
@@ -269,6 +271,16 @@ function App(): JSX.Element {
       if (stepId) {
         const success = !(data.result as { error?: string })?.error
         updateTaskStep(stepId, { status: success ? 'completed' : 'error', result: data.result })
+        
+        // Check if this is storage analysis
+        if (data.name === 'analyze_storage' && success) {
+          const result = data.result as { success: boolean; data?: any }
+          if (result.data) {
+            console.log('[APP] Storage analysis data received, switching to Storage tab')
+            setStorageAnalysis(result.data)
+            setActiveTab('storage')
+          }
+        }
       }
     })
     const unsubRoutingStart = window.api.agent.onRoutingStart(() => setCurrentClassification(null))
@@ -280,7 +292,7 @@ function App(): JSX.Element {
       })
     })
     return () => { unsubChunk(); unsubEnd(); unsubToolCall(); unsubToolResult(); unsubRoutingStart(); unsubRoutingComplete() }
-  }, [addTaskStep, updateTaskStep])
+  }, [addTaskStep, updateTaskStep, setStorageAnalysis])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -343,6 +355,7 @@ function App(): JSX.Element {
 
   const hasAnyFolder = folders.length > 0
   const isSelectingFolder = folderSelectMode !== 'none'
+  const hasStorageData = storageAnalysis !== null
 
   return (
     <div className={`h-screen flex flex-col bg-slate-900 ${isAgentMode ? 'agent-mode theme-transition' : 'theme-transition'}`}>
@@ -542,11 +555,19 @@ function App(): JSX.Element {
                   {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">{pendingCount}</span>}
                 </button>
                 <button onClick={() => setActiveTab('metrics')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>Stats</button>
+                <button onClick={() => setActiveTab('storage')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${activeTab === 'storage' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>
+                  <HardDrive className="w-3 h-3 inline mr-1" />
+                  Storage
+                  {hasStorageData && activeTab !== 'storage' && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-sky-400 rounded-full animate-pulse" />
+                  )}
+                </button>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {activeTab === 'progress' && <ProgressPanel />}
                 {activeTab === 'review' && <ReviewPanel onComplete={async () => { setPendingCount(0); for (const folder of folders) { const newEntries = await window.api.fs.listDir(folder.path); useAppStore.getState().updateFolderEntries(folder.path, newEntries) }}} />}
                 {activeTab === 'metrics' && <MetricsPanel />}
+                {activeTab === 'storage' && <StoragePanel />}
               </div>
             </aside>
           </>

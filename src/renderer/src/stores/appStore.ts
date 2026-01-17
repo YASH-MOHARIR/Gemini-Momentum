@@ -48,6 +48,37 @@ export interface Task {
   completedAt?: string
 }
 
+// ============ Storage Analysis Types ============
+
+export interface StorageFileItem {
+  name: string
+  path: string
+  size: number
+  modified: string
+  age: number
+  extension: string
+}
+
+export interface StorageCategoryStats {
+  type: string
+  size: number
+  count: number
+  percentage: number
+  color: string
+}
+
+export interface StorageAnalysisData {
+  totalSize: number
+  totalFiles: number
+  folderPath: string
+  byType: StorageCategoryStats[]
+  largestFiles: StorageFileItem[]
+  oldFiles: StorageFileItem[]
+  oldFilesSize: number
+  suggestions: string[]
+  scannedAt: string
+}
+
 interface AppState {
   // Folders
   folders: GrantedFolder[]
@@ -63,6 +94,9 @@ interface AppState {
   
   // Agent status
   isAgentReady: boolean
+  
+  // Storage Analysis
+  storageAnalysis: StorageAnalysisData | null
   
   // Actions - Folders
   addFolder: (folder: GrantedFolder) => void
@@ -84,6 +118,9 @@ interface AppState {
   
   // Actions - Agent
   setAgentReady: (ready: boolean) => void
+  
+  // Actions - Storage
+  setStorageAnalysis: (data: StorageAnalysisData | null) => void
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11)
@@ -97,6 +134,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentTask: null,
   taskHistory: [],
   isAgentReady: false,
+  storageAnalysis: null,
 
   // Folder actions
   addFolder: (folder) => {
@@ -209,5 +247,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   
   // Agent actions
-  setAgentReady: (ready) => set({ isAgentReady: ready })
+  setAgentReady: (ready) => set({ isAgentReady: ready }),
+  
+  // Storage actions
+  setStorageAnalysis: (data) => set({ storageAnalysis: data })
 }))
