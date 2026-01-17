@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   FolderOpen, 
   Plus, 
@@ -6,12 +6,15 @@ import {
   Play, 
   Lightbulb,
   GripVertical,
-  FileText
+  FileText,
+  Save
 } from 'lucide-react'
 import { AgentConfig, AgentRule, useAgentStore } from '../stores/agentStore'
 
 interface Props {
   onStart: (config: AgentConfig) => void
+  isEditing?: boolean  // True when editing existing config
+  onCancel?: () => void  // Called when canceling edit
 }
 
 const MAX_RULES = 5
@@ -25,14 +28,27 @@ const EXAMPLE_RULES = [
   "Archives (.zip, .rar) to Archives folder"
 ]
 
-export default function AgentSetup({ onStart }: Props) {
-  const { setStatus } = useAgentStore()
+export default function AgentSetup({ onStart, isEditing = false, onCancel }: Props) {
+  const { config: existingConfig, setStatus } = useAgentStore()
+  
+  // Initialize from existing config if available, otherwise start fresh
   const [watchFolder, setWatchFolder] = useState('')
   const [rules, setRules] = useState<AgentRule[]>([
     { id: '1', text: '', enabled: true, order: 1 }
   ])
   const [enableLog, setEnableLog] = useState(true)
   const [isStarting, setIsStarting] = useState(false)
+
+  // Load existing config when component mounts or when editing
+  useEffect(() => {
+    if (existingConfig) {
+      setWatchFolder(existingConfig.watchFolder || '')
+      if (existingConfig.rules && existingConfig.rules.length > 0) {
+        setRules(existingConfig.rules)
+      }
+      setEnableLog(existingConfig.enableActivityLog ?? true)
+    }
+  }, [existingConfig])
 
   const handleSelectFolder = async () => {
     const folder = await window.api.selectFolder()
@@ -106,10 +122,10 @@ export default function AgentSetup({ onStart }: Props) {
       {/* Header */}
       <div className="text-center pb-2 border-b border-slate-700">
         <h2 className="text-sm font-semibold text-emerald-400 uppercase tracking-wide">
-          Agent Mode Setup
+          {isEditing ? 'Edit Agent Rules' : 'Agent Mode Setup'}
         </h2>
         <p className="text-xs text-slate-500 mt-1">
-          Configure automatic file processing
+          {isEditing ? 'Update your file processing rules' : 'Configure automatic file processing'}
         </p>
       </div>
 
@@ -256,30 +272,43 @@ export default function AgentSetup({ onStart }: Props) {
         </span>
       </div>
 
-      {/* Start Button */}
-      <button
-        onClick={handleStart}
-        disabled={!canStart || isStarting}
-        className={`
-          w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
-          ${canStart && !isStarting
-            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30'
-            : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-          }
-        `}
-      >
-        {isStarting ? (
-          <>
-            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            Starting...
-          </>
-        ) : (
-          <>
-            <Play className="w-4 h-4" />
-            Start Watching
-          </>
+      {/* Start/Save Button */}
+      <div className="space-y-2">
+        <button
+          onClick={handleStart}
+          disabled={!canStart || isStarting}
+          className={`
+            w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
+            ${canStart && !isStarting
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30'
+              : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+            }
+          `}
+        >
+          {isStarting ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {isEditing ? 'Saving...' : 'Starting...'}
+            </>
+          ) : (
+            <>
+              {isEditing ? <Save className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              {isEditing ? 'Save & Resume' : 'Start Watching'}
+            </>
+          )}
+        </button>
+
+        {/* Cancel button when editing */}
+        {isEditing && onCancel && (
+          <button
+            onClick={onCancel}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+          >
+            <X className="w-4 h-4" />
+            Cancel
+          </button>
         )}
-      </button>
+      </div>
 
       {/* Validation hints */}
       {!canStart && (

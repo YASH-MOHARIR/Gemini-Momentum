@@ -12,7 +12,8 @@ import {
   AlertCircle,
   Cpu,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  MessageSquare
 } from 'lucide-react'
 import FileTree from './components/FileTree'
 import ProgressPanel from './components/ProgressPanel'
@@ -20,7 +21,6 @@ import MetricsPanel from './components/MetricsPanel'
 import ReviewPanel from './components/ReviewPanel'
 import GoogleSignIn from './components/GoogleSignIn'
 import TaskTemplates from './components/TaskTemplates'
-import AgentModeToggle from './components/AgentModeToggle'
 import AgentPanel from './components/AgentPanel'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 import { useAgentStore } from './stores/agentStore'
@@ -142,6 +142,47 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
   )
 }
 
+// Mode Tab Switcher Component
+function ModeTabs({ isAgentMode, onModeChange, agentStatus }: { 
+  isAgentMode: boolean
+  onModeChange: (mode: 'chat' | 'agent') => void
+  agentStatus: string
+}) {
+  return (
+    <div className="flex items-center bg-slate-900/50 rounded-lg p-0.5">
+      <button
+        onClick={() => onModeChange('chat')}
+        className={`
+          flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+          ${!isAgentMode 
+            ? 'bg-sky-600 text-white shadow-sm' 
+            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+          }
+        `}
+      >
+        <MessageSquare className="w-4 h-4" />
+        <span>Chat</span>
+      </button>
+      <button
+        onClick={() => onModeChange('agent')}
+        className={`
+          flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all relative
+          ${isAgentMode 
+            ? 'bg-emerald-600 text-white shadow-sm' 
+            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+          }
+        `}
+      >
+        <Bot className="w-4 h-4" />
+        <span>Agent</span>
+        {agentStatus === 'running' && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full status-dot-pulse" />
+        )}
+      </button>
+    </div>
+  )
+}
+
 function App(): JSX.Element {
   const [sidebarWidth] = useState(280)
   const [inputValue, setInputValue] = useState('')
@@ -156,7 +197,7 @@ function App(): JSX.Element {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Agent mode state
-  const { mode: agentMode, status: agentStatus } = useAgentStore()
+  const { mode: agentMode, status: agentStatus, setMode } = useAgentStore()
   const isAgentMode = agentMode === 'agent'
 
   const {
@@ -176,6 +217,16 @@ function App(): JSX.Element {
     updateTaskStep,
     completeTask
   } = useAppStore()
+
+  // Handle mode change
+  const handleModeChange = (mode: 'chat' | 'agent') => {
+    setMode(mode)
+    if (mode === 'agent') {
+      setActiveTab('agent')
+    } else {
+      setActiveTab('progress')
+    }
+  }
 
   // Switch to agent tab when entering agent mode
   useEffect(() => {
@@ -390,18 +441,22 @@ function App(): JSX.Element {
   return (
     <div className={`h-screen flex flex-col bg-slate-900 ${isAgentMode ? 'agent-mode theme-transition' : 'theme-transition'}`}>
       {/* Header */}
-      <header className={`h-12 bg-slate-800 border-b border-slate-700 flex items-center px-4 drag-region ${isAgentMode ? 'header-accent' : ''}`}>
-        <div className="flex items-center gap-2 no-drag">
+      <header className={`h-14 bg-slate-800 border-b border-slate-700 flex items-center px-4 drag-region ${isAgentMode ? 'header-accent' : ''}`}>
+        <div className="flex items-center gap-3 no-drag">
           <Zap className={`w-5 h-5 ${isAgentMode ? 'text-emerald-500' : 'text-sky-500'}`} />
           <span className="font-semibold text-slate-100">Momentum</span>
+          
+          {/* Mode Tab Switcher - Now prominent! */}
+          <div className="ml-4">
+            <ModeTabs 
+              isAgentMode={isAgentMode} 
+              onModeChange={handleModeChange}
+              agentStatus={agentStatus}
+            />
+          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-4 no-drag">
-          {/* Agent Mode Toggle */}
-          <AgentModeToggle />
-          
-          <div className="w-px h-5 bg-slate-700" />
-          
           <GoogleSignIn />
           <div className="w-px h-5 bg-slate-700" />
           <div className={`flex items-center gap-1.5 text-xs ${isAgentReady ? 'text-emerald-400' : 'text-amber-400'}`}>

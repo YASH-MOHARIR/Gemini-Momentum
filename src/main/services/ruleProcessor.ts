@@ -12,12 +12,12 @@ export interface AgentRule {
 }
 
 export interface RuleMatch {
-  matchedRule: number | null  // Rule number (1-5) or null if no match
+  matchedRule: number | null
   action: 'move' | 'skip'
-  destination?: string        // Relative folder path from watch folder
-  rename?: string             // New filename if renaming
+  destination?: string
+  rename?: string
   usedVision: boolean
-  confidence: number          // 0-1
+  confidence: number
   reasoning: string
 }
 
@@ -65,28 +65,51 @@ export async function processFileWithRules(
 
   // Check if this might need vision (image file)
   const isImage = isImageFile(filePath)
-  const rulesNeedVision = rules.some(r => 
-    r.text.toLowerCase().includes('receipt') ||
-    r.text.toLowerCase().includes('screenshot') ||
-    r.text.toLowerCase().includes('photo') ||
-    r.text.toLowerCase().includes('picture')
-  )
+  
+  // Improved auto-detection: catch more user intent
+  const rulesNeedVision = rules.some(r => {
+    const text = r.text.toLowerCase()
+    return (
+      // Direct image types
+      text.includes('receipt') ||
+      text.includes('screenshot') ||
+      text.includes('photo') ||
+      text.includes('picture') ||
+      text.includes('image') ||
+      // Action keywords suggesting AI analysis
+      text.includes('smart') ||
+      text.includes('extract') ||
+      text.includes('categorize') ||
+      text.includes('organize') ||
+      text.includes('analyze') ||
+      text.includes('detect') ||
+      text.includes('identify') ||
+      // Rename keywords (implies wanting smart naming)
+      (text.includes('rename') && !text.includes("don't rename")) ||
+      // Expense/invoice related
+      text.includes('expense') ||
+      text.includes('invoice') ||
+      text.includes('bill')
+    )
+  })
 
-  // First pass: Use text-based classification
-  const textResult = await classifyWithText(fileName, extension, fileSize, rules)
+  console.log(`[RULE PROCESSOR] isImage: ${isImage}, rulesNeedVision: ${rulesNeedVision}`)
 
-  // If image and rules mention image types, use vision for better accuracy
-  if (isImage && rulesNeedVision && textResult.confidence < 0.9) {
-    console.log('[RULE PROCESSOR] Using Vision for better image classification')
+  // If image AND rules need content analysis → ALWAYS use Vision
+  // Text classifier can't determine image content (receipt vs photo vs screenshot)
+  if (isImage && rulesNeedVision) {
+    console.log('[RULE PROCESSOR] Image + content rules detected → Using Vision')
     try {
-      const visionResult = await classifyWithVision(filePath, rules, textResult)
+      const visionResult = await classifyWithVision(filePath, rules)
       return visionResult
     } catch (error) {
-      console.error('[RULE PROCESSOR] Vision failed, using text result:', error)
-      return textResult
+      console.error('[RULE PROCESSOR] Vision failed, falling back to text classification:', error)
+      // Fall through to text classification
     }
   }
 
+  // Text-based classification (for non-images or when Vision fails)
+  const textResult = await classifyWithText(fileName, extension, fileSize, rules)
   return textResult
 }
 
@@ -133,7 +156,6 @@ RESPOND WITH JSON ONLY (no markdown, no explanation):
   "matchedRule": <number 1-5 or null>,
   "action": "move" or "skip",
   "destination": "<relative folder path>",
-  "rename": "<new filename or null>",
   "confidence": <0.0 to 1.0>,
   "reasoning": "<brief explanation>"
 }`
@@ -156,8 +178,7 @@ RESPOND WITH JSON ONLY (no markdown, no explanation):
 
 async function classifyWithVision(
   filePath: string,
-  rules: AgentRule[],
-  textResult: RuleMatch
+  rules: AgentRule[]
 ): Promise<RuleMatch> {
   // Read image file
   const imageBuffer = await fs.readFile(filePath)
@@ -175,7 +196,7 @@ async function classifyWithVision(
     .join('\n')
 
   const fileName = path.basename(filePath)
-  const extension = path.extname(filePath).slice(1).toLowerCase()
+  const extension = path.extname(filePath).toLowerCase()
 
   const prompt = `You are a file organization assistant. Given an image file and its analysis, determine what action to take.
 
@@ -184,7 +205,7 @@ ${rulesText}
 
 FILE:
 - Name: ${fileName}
-- Extension: ${extension}
+- Extension: ${extension.slice(1)}
 
 IMAGE ANALYSIS:
 - Type: ${analysis.imageType}
@@ -195,16 +216,15 @@ ${analysis.description ? `- Description: ${analysis.description}` : ''}
 
 INSTRUCTIONS:
 1. Match the image against the rules based on its analyzed type
-2. If it's a receipt and rules mention receipts, generate a descriptive filename: YYYY-MM-DD_Vendor_$Amount.ext
-3. If it's a screenshot and rules mention screenshots, keep original name or use description
-4. First matching rule wins
+2. Determine destination folder based on matching rule
+3. First matching rule wins
+4. Do NOT generate a rename - that will be handled separately
 
 RESPOND WITH JSON ONLY (no markdown):
 {
   "matchedRule": <number 1-5 or null>,
   "action": "move" or "skip",
   "destination": "<relative folder path>",
-  "rename": "<new filename or null>",
   "confidence": <0.0 to 1.0>,
   "reasoning": "<brief explanation>"
 }`
@@ -220,7 +240,24 @@ RESPOND WITH JSON ONLY (no markdown):
   const result = await model.generateContent(prompt)
   const responseText = result.response.text()
 
-  return parseRuleResponse(responseText, true)
+  const ruleResult = parseRuleResponse(responseText, true)
+
+  // Generate rename ourselves from analysis data
+  if (analysis.imageType === 'receipt' && ruleResult.action === 'move') {
+    const rename = generateReceiptFilename(analysis, extension)
+    if (rename) {
+      ruleResult.rename = rename
+      console.log(`[RULE PROCESSOR] Generated receipt rename: ${rename}`)
+    }
+  } else if (analysis.imageType === 'screenshot' && ruleResult.action === 'move' && analysis.description) {
+    const rename = generateScreenshotFilename(analysis, extension)
+    if (rename) {
+      ruleResult.rename = rename
+      console.log(`[RULE PROCESSOR] Generated screenshot rename: ${rename}`)
+    }
+  }
+
+  return ruleResult
 }
 
 async function analyzeImage(base64: string, mimeType: string): Promise<ImageAnalysis> {
@@ -264,6 +301,64 @@ RESPOND WITH JSON ONLY:
   }
 
   return { imageType: 'other', description: 'Unknown image' }
+}
+
+// ============ Filename Generators ============
+
+function generateReceiptFilename(analysis: ImageAnalysis, extension: string): string | null {
+  const parts: string[] = []
+
+  // Date (required for receipts)
+  if (analysis.date) {
+    parts.push(analysis.date)
+  } else {
+    // Use today's date as fallback
+    parts.push(new Date().toISOString().split('T')[0])
+  }
+
+  // Vendor name (clean for filename)
+  if (analysis.vendor) {
+    const cleanVendor = analysis.vendor
+      .replace(/[^a-zA-Z0-9\s&'-]/g, '') // Keep letters, numbers, spaces, &, ', -
+      .trim()
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .substring(0, 30) // Limit length
+    if (cleanVendor) {
+      parts.push(cleanVendor)
+    }
+  }
+
+  // Amount
+  if (analysis.amount !== undefined && analysis.amount !== null) {
+    // Format as $XX_XX (use underscore since . is problematic in filenames)
+    const formattedAmount = `$${analysis.amount.toFixed(2).replace('.', '_')}`
+    parts.push(formattedAmount)
+  }
+
+  if (parts.length > 1) { // Need at least date + something else
+    return parts.join('_') + extension
+  }
+
+  return null
+}
+
+function generateScreenshotFilename(analysis: ImageAnalysis, extension: string): string | null {
+  if (!analysis.description) return null
+
+  const date = new Date().toISOString().split('T')[0]
+  
+  // Clean description for filename
+  const cleanDesc = analysis.description
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .substring(0, 40) // Limit length
+
+  if (cleanDesc) {
+    return `${date}_${cleanDesc}${extension}`
+  }
+
+  return null
 }
 
 // ============ Helper Functions ============

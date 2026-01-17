@@ -94,6 +94,43 @@ export interface GoogleUser {
   picture?: string
 }
 
+// ============ Agent/Watcher Types ============
+
+export interface AgentRule {
+  id: string
+  text: string
+  enabled: boolean
+  order: number
+}
+
+export interface AgentConfig {
+  watchFolder: string
+  rules: AgentRule[]
+  enableActivityLog: boolean
+  logPath: string
+}
+
+export interface ActivityEntry {
+  id: string
+  timestamp: string
+  originalName: string
+  originalPath: string
+  action: 'moved' | 'renamed' | 'skipped' | 'error'
+  destination?: string
+  newName?: string
+  matchedRule?: number | null
+  usedAI: boolean
+  confidence?: number
+  error?: string
+}
+
+export interface WatcherStatus {
+  running: boolean
+  paused: boolean
+  watchFolder?: string
+  rulesCount?: number
+}
+
 const api = {
   // App
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
@@ -254,6 +291,44 @@ const api = {
       const handler = () => callback()
       ipcRenderer.on('google:signed-out', handler)
       return () => ipcRenderer.removeListener('google:signed-out', handler)
+    }
+  },
+
+  // ============ File Watcher / Agent Mode ============
+  watcher: {
+    start: (config: AgentConfig): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('watcher:start', config),
+    stop: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('watcher:stop'),
+    pause: (): Promise<{ success: boolean; paused: boolean }> =>
+      ipcRenderer.invoke('watcher:pause'),
+    resume: (): Promise<{ success: boolean; paused: boolean }> =>
+      ipcRenderer.invoke('watcher:resume'),
+    getStatus: (): Promise<WatcherStatus> =>
+      ipcRenderer.invoke('watcher:get-status'),
+    updateRules: (rules: AgentRule[]): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('watcher:update-rules', rules),
+
+    // Watcher events
+    onReady: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('watcher:ready', handler)
+      return () => ipcRenderer.removeListener('watcher:ready', handler)
+    },
+    onFileDetected: (callback: (data: { path: string; name: string }) => void) => {
+      const handler = (_: unknown, data: { path: string; name: string }) => callback(data)
+      ipcRenderer.on('watcher:file-detected', handler)
+      return () => ipcRenderer.removeListener('watcher:file-detected', handler)
+    },
+    onFileProcessed: (callback: (entry: ActivityEntry) => void) => {
+      const handler = (_: unknown, entry: ActivityEntry) => callback(entry)
+      ipcRenderer.on('watcher:file-processed', handler)
+      return () => ipcRenderer.removeListener('watcher:file-processed', handler)
+    },
+    onError: (callback: (error: string) => void) => {
+      const handler = (_: unknown, error: string) => callback(error)
+      ipcRenderer.on('watcher:error', handler)
+      return () => ipcRenderer.removeListener('watcher:error', handler)
     }
   }
 }

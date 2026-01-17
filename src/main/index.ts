@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -8,11 +8,15 @@ import * as pendingActions from './services/pendingActions'
 import * as googleAuth from './services/googleAuth'
 import * as googleSheets from './services/googleSheets'
 import * as gmail from './services/gmail'
+import * as fileWatcher from './services/fileWatcher'
+import { initRuleProcessor } from './services/ruleProcessor'
 import { config } from 'dotenv'
 
 config()
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -37,6 +41,69 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  // Handle close button - Option C: Only minimize to tray if agent is running
+  mainWindow.on('close', async (event) => {
+    if (isQuitting) return // Already quitting, let it close
+
+    const watcherStatus = fileWatcher.getWatcherStatus()
+    
+    // If agent is running, ask user what to do
+    if (watcherStatus.running) {
+      event.preventDefault()
+      
+      const { response } = await dialog.showMessageBox(mainWindow!, {
+        type: 'question',
+        buttons: ['Minimize to Tray', 'Stop Agent & Quit', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        title: 'Agent Running',
+        message: 'Your AI agent is still running',
+        detail: 'The agent will continue organizing files in the background if you minimize to tray.'
+      })
+
+      if (response === 0) {
+        // Minimize to tray
+        mainWindow?.hide()
+        if (tray && process.platform === 'win32') {
+          tray.displayBalloon({
+            iconType: 'info',
+            title: 'Momentum',
+            content: 'Agent running in background. Right-click tray icon to control.'
+          })
+        }
+      } else if (response === 1) {
+        // Stop agent and quit
+        isQuitting = true
+        fileWatcher.stopWatcher()
+        mainWindow?.destroy()
+      }
+      // response === 2 (Cancel) - do nothing
+    } else {
+      // Agent not running - quit normally
+      isQuitting = true
+      mainWindow?.destroy()
+    }
+  })
+
+  // Handle minimize button - go to tray if agent is running
+  mainWindow.on('minimize', (event) => {
+    const watcherStatus = fileWatcher.getWatcherStatus()
+    
+    if (watcherStatus.running) {
+      event.preventDefault()
+      mainWindow?.hide()
+      
+      if (tray && process.platform === 'win32') {
+        tray.displayBalloon({
+          iconType: 'info',
+          title: 'Momentum',
+          content: 'Agent running in background. Right-click tray icon to control.'
+        })
+      }
+    }
+    // If agent not running, normal minimize behavior
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
@@ -47,6 +114,109 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+// ============ System Tray ============
+
+function createTray(): void {
+  // Create tray icon
+  const trayIcon = nativeImage.createFromPath(icon)
+  const resizedIcon = trayIcon.resize({ width: 16, height: 16 })
+  
+  tray = new Tray(resizedIcon)
+  tray.setToolTip('Momentum - AI File Agent')
+  
+  updateTrayMenu()
+
+  // Click to show window (Windows/Linux)
+  tray.on('click', () => {
+    if (mainWindow?.isVisible()) {
+      mainWindow.focus()
+    } else {
+      mainWindow?.show()
+    }
+  })
+
+  // Double-click to show window (Windows)
+  tray.on('double-click', () => {
+    mainWindow?.show()
+  })
+}
+
+function updateTrayMenu(): void {
+  if (!tray) return
+
+  const watcherStatus = fileWatcher.getWatcherStatus()
+  const isRunning = watcherStatus.running
+  const isPaused = watcherStatus.paused
+
+  let statusText = '⚪ Agent Idle'
+  if (isRunning && !isPaused) {
+    statusText = '🟢 Agent Running'
+  } else if (isRunning && isPaused) {
+    statusText = '🟡 Agent Paused'
+  }
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: statusText,
+      enabled: false
+    },
+    { type: 'separator' },
+    {
+      label: 'Show Window',
+      click: () => {
+        mainWindow?.show()
+        mainWindow?.focus()
+      }
+    },
+    { type: 'separator' },
+    {
+      label: isPaused ? 'Resume Agent' : 'Pause Agent',
+      enabled: isRunning,
+      click: async () => {
+        if (isPaused) {
+          fileWatcher.resumeWatcher()
+          mainWindow?.webContents.send('watcher:resumed')
+        } else {
+          fileWatcher.pauseWatcher()
+          mainWindow?.webContents.send('watcher:paused')
+        }
+        updateTrayMenu()
+      }
+    },
+    {
+      label: 'Stop Agent',
+      enabled: isRunning,
+      click: () => {
+        fileWatcher.stopWatcher()
+        mainWindow?.webContents.send('watcher:stopped')
+        updateTrayMenu()
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit Momentum',
+      click: () => {
+        isQuitting = true
+        fileWatcher.stopWatcher()
+        app.quit()
+      }
+    }
+  ])
+
+  tray.setContextMenu(contextMenu)
+  
+  // Update tooltip
+  tray.setToolTip(`Momentum - ${statusText}`)
+}
+
+// Update tray when watcher status changes
+function setupWatcherStatusUpdates(): void {
+  // Poll watcher status every 2 seconds to update tray
+  setInterval(() => {
+    updateTrayMenu()
+  }, 2000)
 }
 
 // ============ IPC Handlers ============
@@ -235,7 +405,7 @@ ipcMain.handle('google:sign-out', async () => {
   return { success: true }
 })
 
-// Google Sheets handlers (for direct UI calls if needed)
+// Google Sheets handlers
 ipcMain.handle('google:create-sheet', async (_, data: {
   title: string
   headers: string[]
@@ -250,9 +420,46 @@ ipcMain.handle('google:create-sheet', async (_, data: {
   })
 })
 
-// Gmail handlers (for direct UI calls if needed)
+// Gmail handlers
 ipcMain.handle('google:search-gmail', async (_, query: string, maxResults?: number) => {
   return await gmail.searchEmails(query, maxResults || 20)
+})
+
+// ============ File Watcher / Agent Mode Handlers ============
+
+ipcMain.handle('watcher:start', async (_, config: fileWatcher.AgentConfig) => {
+  if (!mainWindow) {
+    return { success: false, error: 'Main window not available' }
+  }
+  const result = fileWatcher.startWatcher(config, mainWindow)
+  updateTrayMenu() // Update tray when watcher starts
+  return result
+})
+
+ipcMain.handle('watcher:stop', () => {
+  const result = fileWatcher.stopWatcher()
+  updateTrayMenu() // Update tray when watcher stops
+  return result
+})
+
+ipcMain.handle('watcher:pause', () => {
+  const result = fileWatcher.pauseWatcher()
+  updateTrayMenu() // Update tray when watcher pauses
+  return result
+})
+
+ipcMain.handle('watcher:resume', () => {
+  const result = fileWatcher.resumeWatcher()
+  updateTrayMenu() // Update tray when watcher resumes
+  return result
+})
+
+ipcMain.handle('watcher:get-status', () => {
+  return fileWatcher.getWatcherStatus()
+})
+
+ipcMain.handle('watcher:update-rules', (_, rules: fileWatcher.AgentRule[]) => {
+  return fileWatcher.updateRules(rules)
 })
 
 // ============ App Lifecycle ============
@@ -264,6 +471,7 @@ app.whenReady().then(() => {
   const apiKey = process.env.GEMINI_API_KEY
   if (apiKey) {
     gemini.initializeGemini(apiKey)
+    initRuleProcessor(apiKey)
     console.log('[MAIN] Gemini initialized from environment')
   } else {
     console.warn('[MAIN] No GEMINI_API_KEY found in environment')
@@ -277,7 +485,6 @@ app.whenReady().then(() => {
     googleAuth.initializeGoogleAuth(googleClientId, googleClientSecret)
     console.log('[MAIN] Google Auth initialized')
 
-    // Check if already signed in (restore session)
     googleAuth.isSignedIn().then(signedIn => {
       if (signedIn) {
         console.log('[MAIN] Google session restored')
@@ -293,14 +500,31 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  createTray()
+  setupWatcherStatusUpdates()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    } else {
+      mainWindow?.show()
+    }
   })
 })
 
+// macOS: Keep running when window closed if agent is active
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  const status = fileWatcher.getWatcherStatus()
+  
+  // Only keep running if agent is active
+  if (!status.running) {
     app.quit()
   }
+  // If agent is running, keep app alive (tray icon handles control)
+})
+
+// Cleanup before quit
+app.on('before-quit', () => {
+  isQuitting = true
+  fileWatcher.stopWatcher()
 })
