@@ -10,7 +10,8 @@ import {
   FileCode,
   FileSpreadsheet,
   FileArchive,
-  Check
+  Check,
+  MousePointer
 } from 'lucide-react'
 import { FileEntry } from '../stores/appStore'
 
@@ -18,6 +19,8 @@ interface FileTreeProps {
   entries: FileEntry[]
   onFileSelect?: (entry: FileEntry) => void
   selectedPath?: string
+  onFolderClick?: (folderPath: string) => void  // For agent mode folder selection
+  highlightFolders?: boolean  // Visual indication for selection mode
 }
 
 interface FileTreeItemProps {
@@ -25,6 +28,8 @@ interface FileTreeItemProps {
   depth: number
   onFileSelect?: (entry: FileEntry) => void
   selectedPath?: string
+  onFolderClick?: (folderPath: string) => void
+  highlightFolders?: boolean
 }
 
 function getFileIcon(filename: string) {
@@ -53,22 +58,18 @@ function formatSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-function FileTreeItem({ entry, depth, onFileSelect, selectedPath }: FileTreeItemProps) {
+function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick, highlightFolders }: FileTreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[]>(entry.children || [])
   const [isLoading, setIsLoading] = useState(false)
   
-  // Sync children state when entry.children prop changes (from parent refresh)
   useEffect(() => {
     if (entry.children) {
       setChildren(entry.children)
     }
   }, [entry.children])
 
-  // Also refresh when the entry path changes (means folder was updated)
   useEffect(() => {
-    // If folder is expanded and we get new entries, keep it expanded
-    // This handles the case where parent refreshes the tree
     const refreshExpandedFolder = async () => {
       if (entry.isDirectory && isExpanded) {
         try {
@@ -79,19 +80,26 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath }: FileTreeItem
         }
       }
     }
-    
-    // Small delay to batch rapid updates
     const timeoutId = setTimeout(refreshExpandedFolder, 100)
     return () => clearTimeout(timeoutId)
   }, [entry.path, entry.modified, isExpanded])
   
   const isSelected = selectedPath === entry.path
-  const FileIcon = entry.isDirectory 
+  const isFolder = entry.isDirectory
+  const FileIcon = isFolder 
     ? (isExpanded ? FolderOpen : Folder)
     : getFileIcon(entry.name)
 
-  const handleClick = async () => {
-    if (entry.isDirectory) {
+  const handleClick = async (e: React.MouseEvent) => {
+    // If in folder selection mode and this is a folder, use the folder click handler
+    if (highlightFolders && isFolder && onFolderClick) {
+      e.stopPropagation()
+      onFolderClick(entry.path)
+      return
+    }
+
+    // Normal behavior
+    if (isFolder) {
       if (!isExpanded && children.length === 0) {
         setIsLoading(true)
         try {
@@ -107,23 +115,31 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath }: FileTreeItem
     onFileSelect?.(entry)
   }
 
+  // Determine styling based on mode
+  const getItemStyles = () => {
+    if (highlightFolders && isFolder) {
+      // Folder selection mode - highlight folders
+      return 'bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-200 border-l-2 border-emerald-500 cursor-pointer'
+    }
+    if (isSelected) {
+      return 'bg-sky-600/20 text-sky-100 border-l-2 border-sky-500'
+    }
+    return 'hover:bg-slate-700/50 text-slate-300 border-l-2 border-transparent'
+  }
+
   return (
     <div>
       <div
-        className={`
-          flex items-center gap-1 px-2 py-1.5 cursor-pointer rounded-md transition-all
-          ${isSelected 
-            ? 'bg-sky-600/20 text-sky-100 border-l-2 border-sky-500' 
-            : 'hover:bg-slate-700/50 text-slate-300 border-l-2 border-transparent'
-          }
-        `}
+        className={`flex items-center gap-1 px-2 py-1.5 cursor-pointer rounded-md transition-all ${getItemStyles()}`}
         style={{ paddingLeft: `${depth * 12 + 6}px` }}
         onClick={handleClick}
       >
         <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-          {entry.isDirectory ? (
+          {isFolder ? (
             isLoading ? (
               <span className="w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+            ) : highlightFolders ? (
+              <MousePointer className="w-3.5 h-3.5 text-emerald-400" />
             ) : isExpanded ? (
               <ChevronDown className="w-4 h-4 text-slate-500" />
             ) : (
@@ -133,24 +149,34 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath }: FileTreeItem
         </span>
         
         <FileIcon className={`w-4 h-4 flex-shrink-0 ${
-          entry.isDirectory ? 'text-sky-400' : 'text-slate-400'
+          highlightFolders && isFolder 
+            ? 'text-emerald-400' 
+            : isFolder 
+              ? 'text-sky-400' 
+              : 'text-slate-400'
         }`} />
         
         <span className="truncate text-sm flex-1">{entry.name}</span>
         
         {/* Selected indicator */}
-        {isSelected && (
+        {isSelected && !highlightFolders && (
           <Check className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
         )}
         
-        {!entry.isDirectory && !isSelected && (
+        {/* Click hint for folder selection mode */}
+        {highlightFolders && isFolder && (
+          <span className="text-xs text-emerald-400 flex-shrink-0">Click</span>
+        )}
+        
+        {!isFolder && !isSelected && !highlightFolders && (
           <span className="text-xs text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatSize(entry.size)}
           </span>
         )}
       </div>
       
-      {entry.isDirectory && isExpanded && children.length > 0 && (
+      {/* Show children if expanded (and not in folder selection mode, to keep UI simple) */}
+      {isFolder && isExpanded && !highlightFolders && children.length > 0 && (
         <div>
           {children.map((child) => (
             <FileTreeItem
@@ -159,12 +185,14 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath }: FileTreeItem
               depth={depth + 1}
               onFileSelect={onFileSelect}
               selectedPath={selectedPath}
+              onFolderClick={onFolderClick}
+              highlightFolders={highlightFolders}
             />
           ))}
         </div>
       )}
       
-      {entry.isDirectory && isExpanded && children.length === 0 && !isLoading && (
+      {isFolder && isExpanded && !highlightFolders && children.length === 0 && !isLoading && (
         <div 
           className="text-xs text-slate-500 italic py-1"
           style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}
@@ -176,7 +204,7 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath }: FileTreeItem
   )
 }
 
-export default function FileTree({ entries, onFileSelect, selectedPath }: FileTreeProps) {
+export default function FileTree({ entries, onFileSelect, selectedPath, onFolderClick, highlightFolders }: FileTreeProps) {
   if (entries.length === 0) {
     return (
       <div className="text-sm text-slate-500 p-2">
@@ -194,6 +222,8 @@ export default function FileTree({ entries, onFileSelect, selectedPath }: FileTr
           depth={0}
           onFileSelect={onFileSelect}
           selectedPath={selectedPath}
+          onFolderClick={onFolderClick}
+          highlightFolders={highlightFolders}
         />
       ))}
     </div>

@@ -4,12 +4,13 @@ import { create } from 'zustand'
 
 export interface AgentRule {
   id: string
-  text: string           // Natural language rule (max 200 chars)
+  text: string
   enabled: boolean
-  order: number          // Priority (1-5)
+  order: number
 }
 
 export interface AgentConfig {
+  id: string  // NEW: Unique watcher ID
   watchFolder: string
   rules: AgentRule[]
   enableActivityLog: boolean
@@ -18,6 +19,7 @@ export interface AgentConfig {
 
 export interface ActivityEntry {
   id: string
+  watcherId: string  // NEW: Track which watcher processed this
   timestamp: string
   originalName: string
   originalPath: string
@@ -32,44 +34,72 @@ export interface ActivityEntry {
 
 export interface AgentStats {
   filesProcessed: number
-  startTime: number | null
+  startTime: number
   aiCalls: number
   errors: number
 }
 
 export type AgentMode = 'normal' | 'agent'
-export type AgentStatus = 'idle' | 'configuring' | 'running' | 'paused'
+export type AgentStatus = 'idle' | 'running' | 'paused'
+
+// Folder selection mode for click-to-select feature
+export type FolderSelectMode = 'none' | 'watch' | 'destination'
+
+// NEW: Per-watcher state
+export interface WatcherState {
+  config: AgentConfig
+  status: AgentStatus
+  stats: AgentStats
+  recentActivity: ActivityEntry[]
+}
 
 // ============ Store Interface ============
 
 interface AgentState {
   // State
   mode: AgentMode
-  status: AgentStatus
-  config: AgentConfig | null
-  stats: AgentStats
-  recentActivity: ActivityEntry[]
+  watchers: Map<string, WatcherState>  // NEW: Map of watcher states
+  activeWatcherId: string | null  // NEW: Currently viewing watcher
+  
+  // Folder selection state
+  folderSelectMode: FolderSelectMode
+  selectingForWatcherId: string | null  // NEW: Which watcher is selecting
   
   // Actions
   setMode: (mode: AgentMode) => void
-  setStatus: (status: AgentStatus) => void
-  setConfig: (config: AgentConfig) => void
-  updateConfig: (updates: Partial<AgentConfig>) => void
-  updateStats: (updates: Partial<AgentStats>) => void
-  incrementStat: (key: 'filesProcessed' | 'aiCalls' | 'errors') => void
-  addActivity: (entry: ActivityEntry) => void
-  clearActivity: () => void
-  reset: () => void
+  
+  // Watcher management
+  createWatcher: (config: AgentConfig) => void
+  removeWatcher: (watcherId: string) => void
+  setActiveWatcher: (watcherId: string | null) => void
+  updateWatcherConfig: (watcherId: string, updates: Partial<AgentConfig>) => void
+  setWatcherStatus: (watcherId: string, status: AgentStatus) => void
+  updateWatcherStats: (watcherId: string, updates: Partial<AgentStats>) => void
+  incrementWatcherStat: (watcherId: string, key: 'filesProcessed' | 'aiCalls' | 'errors') => void
+  addWatcherActivity: (watcherId: string, entry: ActivityEntry) => void
+  clearWatcherActivity: (watcherId: string) => void
+  
+  // Folder selection actions
+  startFolderSelect: (mode: FolderSelectMode, watcherId: string) => void
+  cancelFolderSelect: () => void
+  completeFolderSelect: (folderPath: string) => void
   
   // Computed helpers
-  getRunningDuration: () => number
+  getWatcherDuration: (watcherId: string) => number
+  getActiveWatcher: () => WatcherState | null
+  getWatcherCount: () => number
+  canAddWatcher: () => boolean
 }
+
+// ============ Constants ============
+
+const MAX_WATCHERS = 5
 
 // ============ Initial State ============
 
 const initialStats: AgentStats = {
   filesProcessed: 0,
-  startTime: null,
+  startTime: Date.now(),
   aiCalls: 0,
   errors: 0
 }
@@ -79,74 +109,189 @@ const initialStats: AgentStats = {
 export const useAgentStore = create<AgentState>((set, get) => ({
   // Initial state
   mode: 'normal',
-  status: 'idle',
-  config: null,
-  stats: { ...initialStats },
-  recentActivity: [],
+  watchers: new Map(),
+  activeWatcherId: null,
+  folderSelectMode: 'none',
+  selectingForWatcherId: null,
   
   // Mode switching
   setMode: (mode) => {
     set({ mode })
-    // Reset status when switching modes
     if (mode === 'normal') {
-      set({ status: 'idle' })
-    } else {
-      set({ status: 'configuring' })
+      set({ folderSelectMode: 'none', selectingForWatcherId: null })
     }
   },
   
-  // Status management
-  setStatus: (status) => {
-    set({ status })
-    // Start timer when running begins
-    if (status === 'running' && !get().stats.startTime) {
-      set((state) => ({
-        stats: { ...state.stats, startTime: Date.now() }
-      }))
+  // Watcher management
+  createWatcher: (config) => {
+    const { watchers } = get()
+    const newWatcherState: WatcherState = {
+      config,
+      status: 'idle',
+      stats: { ...initialStats, startTime: Date.now() },
+      recentActivity: []
+    }
+    const newWatchers = new Map(watchers)
+    newWatchers.set(config.id, newWatcherState)
+    set({ watchers: newWatchers, activeWatcherId: config.id })
+  },
+  
+  removeWatcher: (watcherId) => {
+    const { watchers, activeWatcherId } = get()
+    const newWatchers = new Map(watchers)
+    newWatchers.delete(watcherId)
+    const newActiveId = activeWatcherId === watcherId ? null : activeWatcherId
+    set({ watchers: newWatchers, activeWatcherId: newActiveId })
+  },
+  
+  setActiveWatcher: (watcherId) => {
+    set({ activeWatcherId: watcherId })
+  },
+  
+  updateWatcherConfig: (watcherId, updates) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (watcher) {
+      const newWatchers = new Map(watchers)
+      newWatchers.set(watcherId, {
+        ...watcher,
+        config: { ...watcher.config, ...updates }
+      })
+      set({ watchers: newWatchers })
     }
   },
   
-  // Config management
-  setConfig: (config) => set({ config }),
+  setWatcherStatus: (watcherId, status) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (watcher) {
+      const newWatchers = new Map(watchers)
+      const updates: Partial<WatcherState> = { status }
+      
+      // Reset start time when starting
+      if (status === 'running' && watcher.status !== 'running') {
+        updates.stats = { ...watcher.stats, startTime: Date.now() }
+      }
+      
+      newWatchers.set(watcherId, { ...watcher, ...updates })
+      set({ watchers: newWatchers })
+    }
+  },
   
-  updateConfig: (updates) => set((state) => ({
-    config: state.config ? { ...state.config, ...updates } : null
-  })),
+  updateWatcherStats: (watcherId, updates) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (watcher) {
+      const newWatchers = new Map(watchers)
+      newWatchers.set(watcherId, {
+        ...watcher,
+        stats: { ...watcher.stats, ...updates }
+      })
+      set({ watchers: newWatchers })
+    }
+  },
   
-  // Stats management
-  updateStats: (updates) => set((state) => ({
-    stats: { ...state.stats, ...updates }
-  })),
+  incrementWatcherStat: (watcherId, key) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (watcher) {
+      const newWatchers = new Map(watchers)
+      newWatchers.set(watcherId, {
+        ...watcher,
+        stats: { ...watcher.stats, [key]: watcher.stats[key] + 1 }
+      })
+      set({ watchers: newWatchers })
+    }
+  },
   
-  incrementStat: (key) => set((state) => ({
-    stats: { ...state.stats, [key]: state.stats[key] + 1 }
-  })),
+  addWatcherActivity: (watcherId, entry) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (watcher) {
+      const newWatchers = new Map(watchers)
+      newWatchers.set(watcherId, {
+        ...watcher,
+        recentActivity: [entry, ...watcher.recentActivity].slice(0, 50)
+      })
+      set({ watchers: newWatchers })
+    }
+  },
   
-  // Activity feed management
-  addActivity: (entry) => set((state) => ({
-    recentActivity: [entry, ...state.recentActivity].slice(0, 50) // Keep last 50
-  })),
+  clearWatcherActivity: (watcherId) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (watcher) {
+      const newWatchers = new Map(watchers)
+      newWatchers.set(watcherId, {
+        ...watcher,
+        recentActivity: []
+      })
+      set({ watchers: newWatchers })
+    }
+  },
   
-  clearActivity: () => set({ recentActivity: [] }),
-  
-  // Full reset
-  reset: () => set({
-    status: 'idle',
-    config: null,
-    stats: { ...initialStats },
-    recentActivity: []
+  // Folder selection
+  startFolderSelect: (mode, watcherId) => set({
+    folderSelectMode: mode,
+    selectingForWatcherId: watcherId
   }),
   
+  cancelFolderSelect: () => set({
+    folderSelectMode: 'none',
+    selectingForWatcherId: null
+  }),
+  
+  completeFolderSelect: (folderPath) => {
+    const { folderSelectMode, selectingForWatcherId, watchers } = get()
+    
+    if (!selectingForWatcherId) return
+    
+    if (folderSelectMode === 'watch') {
+      // Set as watch folder for the watcher being configured
+      const watcher = watchers.get(selectingForWatcherId)
+      if (watcher) {
+        const newWatchers = new Map(watchers)
+        newWatchers.set(selectingForWatcherId, {
+          ...watcher,
+          config: { ...watcher.config, watchFolder: folderPath }
+        })
+        set({ 
+          watchers: newWatchers,
+          folderSelectMode: 'none',
+          selectingForWatcherId: null
+        })
+      }
+    }
+    
+    // Clear selection mode
+    set({ folderSelectMode: 'none', selectingForWatcherId: null })
+  },
+  
   // Helper to get running duration in seconds
-  getRunningDuration: () => {
-    const { stats, status } = get()
-    if (!stats.startTime || status !== 'running') return 0
-    return Math.floor((Date.now() - stats.startTime) / 1000)
+  getWatcherDuration: (watcherId) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (!watcher || watcher.status !== 'running') return 0
+    return Math.floor((Date.now() - watcher.stats.startTime) / 1000)
+  },
+  
+  getActiveWatcher: () => {
+    const { watchers, activeWatcherId } = get()
+    return activeWatcherId ? watchers.get(activeWatcherId) || null : null
+  },
+  
+  getWatcherCount: () => {
+    return get().watchers.size
+  },
+  
+  canAddWatcher: () => {
+    return get().watchers.size < MAX_WATCHERS
   }
 }))
 
-// ============ Selectors (for performance) ============
+// ============ Selectors ============
 
 export const selectIsAgentMode = (state: AgentState) => state.mode === 'agent'
-export const selectIsRunning = (state: AgentState) => state.status === 'running'
-export const selectActivityCount = (state: AgentState) => state.recentActivity.length
+export const selectHasRunningWatchers = (state: AgentState) => 
+  Array.from(state.watchers.values()).some(w => w.status === 'running')
+export const selectIsSelectingFolder = (state: AgentState) => state.folderSelectMode !== 'none'

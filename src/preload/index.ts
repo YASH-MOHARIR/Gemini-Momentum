@@ -104,6 +104,7 @@ export interface AgentRule {
 }
 
 export interface AgentConfig {
+  id: string  // NEW: Unique watcher ID
   watchFolder: string
   rules: AgentRule[]
   enableActivityLog: boolean
@@ -112,6 +113,7 @@ export interface AgentConfig {
 
 export interface ActivityEntry {
   id: string
+  watcherId: string  // NEW: Track which watcher processed this
   timestamp: string
   originalName: string
   originalPath: string
@@ -129,6 +131,13 @@ export interface WatcherStatus {
   paused: boolean
   watchFolder?: string
   rulesCount?: number
+}
+
+export interface WatcherStats {
+  filesProcessed: number
+  startTime: number
+  aiCalls: number
+  errors: number
 }
 
 const api = {
@@ -296,39 +305,50 @@ const api = {
 
   // ============ File Watcher / Agent Mode ============
   watcher: {
-    start: (config: AgentConfig): Promise<{ success: boolean; error?: string }> =>
+    start: (config: AgentConfig): Promise<{ success: boolean; error?: string; watcherId?: string }> =>
       ipcRenderer.invoke('watcher:start', config),
-    stop: (): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke('watcher:stop'),
-    pause: (): Promise<{ success: boolean; paused: boolean }> =>
-      ipcRenderer.invoke('watcher:pause'),
-    resume: (): Promise<{ success: boolean; paused: boolean }> =>
-      ipcRenderer.invoke('watcher:resume'),
-    getStatus: (): Promise<WatcherStatus> =>
-      ipcRenderer.invoke('watcher:get-status'),
-    updateRules: (rules: AgentRule[]): Promise<{ success: boolean }> =>
-      ipcRenderer.invoke('watcher:update-rules', rules),
+    stop: (watcherId: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('watcher:stop', watcherId),
+    stopAll: (): Promise<{ success: boolean; count: number }> =>
+      ipcRenderer.invoke('watcher:stop-all'),
+    pause: (watcherId: string): Promise<{ success: boolean; paused: boolean }> =>
+      ipcRenderer.invoke('watcher:pause', watcherId),
+    resume: (watcherId: string): Promise<{ success: boolean; paused: boolean }> =>
+      ipcRenderer.invoke('watcher:resume', watcherId),
+    getStatus: (watcherId?: string): Promise<WatcherStatus> =>
+      ipcRenderer.invoke('watcher:get-status', watcherId),
+    getAll: (): Promise<AgentConfig[]> =>
+      ipcRenderer.invoke('watcher:get-all'),
+    getStats: (watcherId: string): Promise<WatcherStats | null> =>
+      ipcRenderer.invoke('watcher:get-stats', watcherId),
+    updateRules: (watcherId: string, rules: AgentRule[]): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('watcher:update-rules', watcherId, rules),
 
-    // Watcher events
-    onReady: (callback: () => void) => {
-      const handler = () => callback()
+    // Watcher events - now include watcherId
+    onReady: (callback: (watcherId: string) => void) => {
+      const handler = (_: unknown, watcherId: string) => callback(watcherId)
       ipcRenderer.on('watcher:ready', handler)
       return () => ipcRenderer.removeListener('watcher:ready', handler)
     },
-    onFileDetected: (callback: (data: { path: string; name: string }) => void) => {
-      const handler = (_: unknown, data: { path: string; name: string }) => callback(data)
+    onFileDetected: (callback: (watcherId: string, data: { path: string; name: string }) => void) => {
+      const handler = (_: unknown, watcherId: string, data: { path: string; name: string }) => callback(watcherId, data)
       ipcRenderer.on('watcher:file-detected', handler)
       return () => ipcRenderer.removeListener('watcher:file-detected', handler)
     },
-    onFileProcessed: (callback: (entry: ActivityEntry) => void) => {
-      const handler = (_: unknown, entry: ActivityEntry) => callback(entry)
+    onFileProcessed: (callback: (watcherId: string, entry: ActivityEntry) => void) => {
+      const handler = (_: unknown, watcherId: string, entry: ActivityEntry) => callback(watcherId, entry)
       ipcRenderer.on('watcher:file-processed', handler)
       return () => ipcRenderer.removeListener('watcher:file-processed', handler)
     },
-    onError: (callback: (error: string) => void) => {
-      const handler = (_: unknown, error: string) => callback(error)
+    onError: (callback: (watcherId: string, error: string) => void) => {
+      const handler = (_: unknown, watcherId: string, error: string) => callback(watcherId, error)
       ipcRenderer.on('watcher:error', handler)
       return () => ipcRenderer.removeListener('watcher:error', handler)
+    },
+    onAllStopped: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('watcher:all-stopped', handler)
+      return () => ipcRenderer.removeListener('watcher:all-stopped', handler)
     }
   }
 }

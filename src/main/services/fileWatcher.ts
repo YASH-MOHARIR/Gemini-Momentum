@@ -15,6 +15,7 @@ export interface AgentRule {
 }
 
 export interface AgentConfig {
+  id: string  // NEW: Unique watcher ID
   watchFolder: string
   rules: AgentRule[]
   enableActivityLog: boolean
@@ -23,6 +24,7 @@ export interface AgentConfig {
 
 export interface ActivityEntry {
   id: string
+  watcherId: string  // NEW: Track which watcher processed this
   timestamp: string
   originalName: string
   originalPath: string
@@ -35,32 +37,53 @@ export interface ActivityEntry {
   error?: string
 }
 
+export interface WatcherStats {
+  filesProcessed: number
+  startTime: number
+  aiCalls: number
+  errors: number
+}
+
+interface WatcherInstance {
+  watcher: chokidar.FSWatcher
+  config: AgentConfig
+  isPaused: boolean
+  stats: WatcherStats
+}
+
 // ============ State ============
 
-let watcher: chokidar.FSWatcher | null = null
-let config: AgentConfig | null = null
-let isPaused = false
+const watchers = new Map<string, WatcherInstance>()
 let mainWindowRef: BrowserWindow | null = null
+
+const MAX_WATCHERS = 5
 
 // ============ Public Functions ============
 
 export function startWatcher(
   agentConfig: AgentConfig,
   mainWindow: BrowserWindow
-): { success: boolean; error?: string } {
-  if (watcher) {
-    return { success: false, error: 'Watcher already running' }
+): { success: boolean; error?: string; watcherId?: string } {
+  // Check max watchers limit
+  if (watchers.size >= MAX_WATCHERS) {
+    return { success: false, error: `Maximum ${MAX_WATCHERS} watchers allowed` }
   }
 
-  config = agentConfig
-  mainWindowRef = mainWindow
-  isPaused = false
+  // Check if folder already being watched
+  for (const [id, instance] of watchers.entries()) {
+    if (instance.config.watchFolder === agentConfig.watchFolder) {
+      return { success: false, error: 'This folder is already being watched' }
+    }
+  }
 
-  console.log(`[WATCHER] Starting watcher on: ${config.watchFolder}`)
-  console.log(`[WATCHER] Rules:`, config.rules.map(r => r.text))
+  mainWindowRef = mainWindow
+  const watcherId = agentConfig.id
+
+  console.log(`[WATCHER ${watcherId}] Starting watcher on: ${agentConfig.watchFolder}`)
+  console.log(`[WATCHER ${watcherId}] Rules:`, agentConfig.rules.map(r => r.text))
 
   try {
-    watcher = chokidar.watch(config.watchFolder, {
+    const watcher = chokidar.watch(agentConfig.watchFolder, {
       ignored: [
         /(^|[\/\\])\../, // Ignore hidden files (dotfiles)
         /momentum_activity_log\.xlsx$/, // Ignore our own log file
@@ -78,76 +101,132 @@ export function startWatcher(
       depth: 0 // Only watch top level of folder
     })
 
+    const stats: WatcherStats = {
+      filesProcessed: 0,
+      startTime: Date.now(),
+      aiCalls: 0,
+      errors: 0
+    }
+
+    // Store watcher instance
+    watchers.set(watcherId, {
+      watcher,
+      config: agentConfig,
+      isPaused: false,
+      stats
+    })
+
     // File added event
     watcher.on('add', async (filePath) => {
-      if (isPaused) {
-        console.log(`[WATCHER] Paused, ignoring: ${filePath}`)
+      const instance = watchers.get(watcherId)
+      if (!instance || instance.isPaused) {
+        console.log(`[WATCHER ${watcherId}] Paused, ignoring: ${filePath}`)
         return
       }
-      await handleNewFile(filePath)
+      await handleNewFile(watcherId, filePath)
     })
 
     // Error event
     watcher.on('error', (error) => {
-      console.error('[WATCHER] Error:', error)
-      mainWindowRef?.webContents.send('watcher:error', String(error))
+      console.error(`[WATCHER ${watcherId}] Error:`, error)
+      mainWindowRef?.webContents.send('watcher:error', watcherId, String(error))
     })
 
     // Ready event
     watcher.on('ready', () => {
-      console.log('[WATCHER] Ready and watching')
-      mainWindowRef?.webContents.send('watcher:ready')
+      console.log(`[WATCHER ${watcherId}] Ready and watching`)
+      mainWindowRef?.webContents.send('watcher:ready', watcherId)
     })
 
-    return { success: true }
+    return { success: true, watcherId }
   } catch (error) {
-    console.error('[WATCHER] Failed to start:', error)
+    console.error(`[WATCHER ${watcherId}] Failed to start:`, error)
     return { success: false, error: String(error) }
   }
 }
 
-export function stopWatcher(): { success: boolean } {
-  if (watcher) {
-    watcher.close()
-    watcher = null
-    config = null
-    isPaused = false
-    mainWindowRef = null
-    console.log('[WATCHER] Stopped')
+export function stopWatcher(watcherId: string): { success: boolean } {
+  const instance = watchers.get(watcherId)
+  if (instance) {
+    instance.watcher.close()
+    watchers.delete(watcherId)
+    console.log(`[WATCHER ${watcherId}] Stopped`)
+    return { success: true }
   }
-  return { success: true }
+  return { success: false }
 }
 
-export function pauseWatcher(): { success: boolean; paused: boolean } {
-  isPaused = true
-  console.log('[WATCHER] Paused')
-  return { success: true, paused: true }
+export function stopAllWatchers(): { success: boolean; count: number } {
+  const count = watchers.size
+  for (const [watcherId, instance] of watchers.entries()) {
+    instance.watcher.close()
+    console.log(`[WATCHER ${watcherId}] Stopped`)
+  }
+  watchers.clear()
+  return { success: true, count }
 }
 
-export function resumeWatcher(): { success: boolean; paused: boolean } {
-  isPaused = false
-  console.log('[WATCHER] Resumed')
-  return { success: true, paused: false }
+export function pauseWatcher(watcherId: string): { success: boolean; paused: boolean } {
+  const instance = watchers.get(watcherId)
+  if (instance) {
+    instance.isPaused = true
+    console.log(`[WATCHER ${watcherId}] Paused`)
+    return { success: true, paused: true }
+  }
+  return { success: false, paused: false }
 }
 
-export function getWatcherStatus(): {
+export function resumeWatcher(watcherId: string): { success: boolean; paused: boolean } {
+  const instance = watchers.get(watcherId)
+  if (instance) {
+    instance.isPaused = false
+    console.log(`[WATCHER ${watcherId}] Resumed`)
+    return { success: true, paused: false }
+  }
+  return { success: false, paused: false }
+}
+
+export function getWatcherStatus(watcherId?: string): {
   running: boolean
   paused: boolean
   watchFolder?: string
   rulesCount?: number
 } {
+  if (watcherId) {
+    const instance = watchers.get(watcherId)
+    if (instance) {
+      return {
+        running: true,
+        paused: instance.isPaused,
+        watchFolder: instance.config.watchFolder,
+        rulesCount: instance.config.rules.length
+      }
+    }
+    return { running: false, paused: false }
+  }
+
+  // Legacy: Return status of any running watcher
+  const anyRunning = watchers.size > 0
   return {
-    running: watcher !== null,
-    paused: isPaused,
-    watchFolder: config?.watchFolder,
-    rulesCount: config?.rules.length
+    running: anyRunning,
+    paused: false // Can't determine single pause state
   }
 }
 
-export function updateRules(newRules: AgentRule[]): { success: boolean } {
-  if (config) {
-    config.rules = newRules
-    console.log('[WATCHER] Rules updated:', newRules.map(r => r.text))
+export function getAllWatchers(): AgentConfig[] {
+  return Array.from(watchers.values()).map(instance => instance.config)
+}
+
+export function getWatcherStats(watcherId: string): WatcherStats | null {
+  const instance = watchers.get(watcherId)
+  return instance ? instance.stats : null
+}
+
+export function updateRules(watcherId: string, newRules: AgentRule[]): { success: boolean } {
+  const instance = watchers.get(watcherId)
+  if (instance) {
+    instance.config.rules = newRules
+    console.log(`[WATCHER ${watcherId}] Rules updated:`, newRules.map(r => r.text))
     return { success: true }
   }
   return { success: false }
@@ -155,12 +234,15 @@ export function updateRules(newRules: AgentRule[]): { success: boolean } {
 
 // ============ Internal Functions ============
 
-async function handleNewFile(filePath: string): Promise<void> {
+async function handleNewFile(watcherId: string, filePath: string): Promise<void> {
+  const instance = watchers.get(watcherId)
+  if (!instance) return
+
   const fileName = path.basename(filePath)
-  console.log(`[WATCHER] New file detected: ${fileName}`)
+  console.log(`[WATCHER ${watcherId}] New file detected: ${fileName}`)
 
   // Notify UI that processing started
-  mainWindowRef?.webContents.send('watcher:file-detected', {
+  mainWindowRef?.webContents.send('watcher:file-detected', watcherId, {
     path: filePath,
     name: fileName
   })
@@ -170,29 +252,38 @@ async function handleNewFile(filePath: string): Promise<void> {
     try {
       await fs.access(filePath)
     } catch {
-      console.log(`[WATCHER] File no longer exists: ${filePath}`)
+      console.log(`[WATCHER ${watcherId}] File no longer exists: ${filePath}`)
       return
     }
 
     // Process file with AI rules
-    const result = await processFileWithRules(filePath, config!.rules)
-    console.log(`[WATCHER] Rule processing result:`, result)
+    const result = await processFileWithRules(filePath, instance.config.rules)
+    console.log(`[WATCHER ${watcherId}] Rule processing result:`, result)
+
+    // Track AI usage
+    if (result.usedVision) {
+      instance.stats.aiCalls++
+    }
 
     // Execute action based on result
     if (result.action === 'move' && result.destination) {
-      const entry = await executeMove(filePath, result)
-      
+      const entry = await executeMove(watcherId, filePath, result)
+      instance.stats.filesProcessed++
+
       // Log to Excel if enabled
-      if (config!.enableActivityLog) {
-        await logActivity(config!.logPath, entry)
+      if (instance.config.enableActivityLog) {
+        await logActivity(instance.config.logPath, entry)
       }
 
       // Notify UI
-      mainWindowRef?.webContents.send('watcher:file-processed', entry)
+      mainWindowRef?.webContents.send('watcher:file-processed', watcherId, entry)
     } else {
       // File skipped - no matching rule or skip action
+      instance.stats.filesProcessed++
+      
       const entry: ActivityEntry = {
         id: Date.now().toString(),
+        watcherId,
         timestamp: new Date().toISOString(),
         originalName: fileName,
         originalPath: filePath,
@@ -202,17 +293,19 @@ async function handleNewFile(filePath: string): Promise<void> {
         confidence: result.confidence
       }
 
-      if (config!.enableActivityLog) {
-        await logActivity(config!.logPath, entry)
+      if (instance.config.enableActivityLog) {
+        await logActivity(instance.config.logPath, entry)
       }
 
-      mainWindowRef?.webContents.send('watcher:file-processed', entry)
+      mainWindowRef?.webContents.send('watcher:file-processed', watcherId, entry)
     }
   } catch (error) {
-    console.error(`[WATCHER] Error processing ${fileName}:`, error)
+    console.error(`[WATCHER ${watcherId}] Error processing ${fileName}:`, error)
+    instance.stats.errors++
     
     const entry: ActivityEntry = {
       id: Date.now().toString(),
+      watcherId,
       timestamp: new Date().toISOString(),
       originalName: fileName,
       originalPath: filePath,
@@ -222,24 +315,26 @@ async function handleNewFile(filePath: string): Promise<void> {
       error: String(error)
     }
 
-    if (config?.enableActivityLog) {
-      await logActivity(config.logPath, entry)
+    if (instance.config.enableActivityLog) {
+      await logActivity(instance.config.logPath, entry)
     }
 
-    mainWindowRef?.webContents.send('watcher:file-processed', entry)
+    mainWindowRef?.webContents.send('watcher:file-processed', watcherId, entry)
   }
 }
 
 async function executeMove(
+  watcherId: string,
   filePath: string,
   result: RuleMatch
 ): Promise<ActivityEntry> {
+  const instance = watchers.get(watcherId)!
   const fileName = path.basename(filePath)
-  const destFolder = path.join(config!.watchFolder, result.destination!)
+  const destFolder = path.join(instance.config.watchFolder, result.destination!)
   const newFileName = result.rename || fileName
   const destPath = path.join(destFolder, newFileName)
 
-  console.log(`[WATCHER] Moving: ${filePath} → ${destPath}`)
+  console.log(`[WATCHER ${watcherId}] Moving: ${filePath} → ${destPath}`)
 
   // Create destination folder if needed
   await fs.mkdir(destFolder, { recursive: true })
@@ -251,13 +346,14 @@ async function executeMove(
   // Move the file
   await fs.rename(filePath, finalDestPath)
 
-  console.log(`[WATCHER] Moved successfully to: ${finalDestPath}`)
+  console.log(`[WATCHER ${watcherId}] Moved successfully to: ${finalDestPath}`)
 
   // Notify file system changed (for UI refresh)
   mainWindowRef?.webContents.send('fs:changed')
 
   return {
     id: Date.now().toString(),
+    watcherId,
     timestamp: new Date().toISOString(),
     originalName: fileName,
     originalPath: filePath,

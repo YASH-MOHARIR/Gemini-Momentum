@@ -21,7 +21,7 @@ import MetricsPanel from './components/MetricsPanel'
 import ReviewPanel from './components/ReviewPanel'
 import GoogleSignIn from './components/GoogleSignIn'
 import TaskTemplates from './components/TaskTemplates'
-import AgentPanel from './components/AgentPanel'
+import AgentWorkspace from './components/AgentWorkspace'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 import { useAgentStore } from './stores/agentStore'
 
@@ -40,15 +40,12 @@ function RoutingIndicator({ classification }: { classification: TaskClassificati
       </div>
     )
   }
-
   const executorColors: Record<string, string> = {
     'flash-minimal': 'text-emerald-400 bg-emerald-900/30',
     'flash-high': 'text-sky-400 bg-sky-900/30',
     'pro-high': 'text-purple-400 bg-purple-900/30'
   }
-
   const color = executorColors[classification.recommendedExecutor] || 'text-slate-400 bg-slate-800'
-
   return (
     <div className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs ${color}`}>
       <Cpu className="w-3 h-3" />
@@ -62,10 +59,8 @@ function RoutingIndicator({ classification }: { classification: TaskClassificati
 function formatMessage(content: string): JSX.Element[] {
   const lines = content.split('\n')
   const elements: JSX.Element[] = []
-
   lines.forEach((line, index) => {
     let formattedLine: React.ReactNode = line
-
     if (line.includes('**')) {
       const parts = line.split(/(\*\*[^*]+\*\*)/)
       formattedLine = parts.map((part, i) => {
@@ -75,7 +70,6 @@ function formatMessage(content: string): JSX.Element[] {
         return part
       })
     }
-
     if (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*')) {
       const bulletContent = line.replace(/^[\s]*[•\-\*][\s]*/, '')
       elements.push(
@@ -90,19 +84,16 @@ function formatMessage(content: string): JSX.Element[] {
       elements.push(<div key={index}>{formattedLine}</div>)
     }
   })
-
   return elements
 }
 
 function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === 'user'
-
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-accent' : 'bg-slate-700'}`}>
         {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
       </div>
-
       <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
         <div className={`inline-block px-4 py-2 rounded-lg text-sm ${isUser ? 'bg-accent text-white' : 'bg-slate-800 text-slate-100'} ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}`}>
           {message.isError && (
@@ -120,7 +111,6 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
             </div>
           )}
         </div>
-
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mt-2 space-y-1">
             {message.toolCalls.map((tool, i) => (
@@ -131,7 +121,6 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
             ))}
           </div>
         )}
-
         {!isStreaming && (
           <p className="text-xs text-slate-500 mt-1">
             {new Date(message.timestamp).toLocaleTimeString()}
@@ -142,7 +131,6 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
   )
 }
 
-// Mode Tab Switcher Component
 function ModeTabs({ isAgentMode, onModeChange, agentStatus }: { 
   isAgentMode: boolean
   onModeChange: (mode: 'chat' | 'agent') => void
@@ -152,31 +140,23 @@ function ModeTabs({ isAgentMode, onModeChange, agentStatus }: {
     <div className="flex items-center bg-slate-900/50 rounded-lg p-0.5">
       <button
         onClick={() => onModeChange('chat')}
-        className={`
-          flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
-          ${!isAgentMode 
-            ? 'bg-sky-600 text-white shadow-sm' 
-            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-          }
-        `}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+          !isAgentMode ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+        }`}
       >
         <MessageSquare className="w-4 h-4" />
         <span>Chat</span>
       </button>
       <button
         onClick={() => onModeChange('agent')}
-        className={`
-          flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all relative
-          ${isAgentMode 
-            ? 'bg-emerald-600 text-white shadow-sm' 
-            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-          }
-        `}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all relative ${
+          isAgentMode ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+        }`}
       >
         <Bot className="w-4 h-4" />
         <span>Agent</span>
         {agentStatus === 'running' && (
-          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full status-dot-pulse" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
         )}
       </button>
     </div>
@@ -189,53 +169,32 @@ function App(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review' | 'agent'>('progress')
+  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review'>('progress')
   const [pendingCount, setPendingCount] = useState(0)
   const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(null)
   const [isGoogleConnected, setIsGoogleConnected] = useState(false)
   const [showTemplates, setShowTemplates] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Agent mode state
-  const { mode: agentMode, status: agentStatus, setMode } = useAgentStore()
+  const { mode: agentMode, status: agentStatus, setMode, folderSelectMode, completeFolderSelect, cancelFolderSelect } = useAgentStore()
   const isAgentMode = agentMode === 'agent'
 
   const {
-    folders,
-    selectedFile,
-    messages,
-    isProcessing,
-    isAgentReady,
-    addFolder,
-    removeFolder,
-    setSelectedFile,
-    addMessage,
-    setProcessing,
-    setAgentReady,
-    startTask,
-    addTaskStep,
-    updateTaskStep,
-    completeTask
+    folders, selectedFile, messages, isProcessing, isAgentReady,
+    addFolder, removeFolder, setSelectedFile, addMessage, setProcessing,
+    setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask
   } = useAppStore()
 
-  // Handle mode change
   const handleModeChange = (mode: 'chat' | 'agent') => {
     setMode(mode)
-    if (mode === 'agent') {
-      setActiveTab('agent')
-    } else {
-      setActiveTab('progress')
-    }
   }
 
-  // Switch to agent tab when entering agent mode
-  useEffect(() => {
-    if (isAgentMode) {
-      setActiveTab('agent')
-    } else if (activeTab === 'agent') {
-      setActiveTab('progress')
+  // Handle folder click for agent mode selection
+  const handleFolderClickForAgent = (folderPath: string) => {
+    if (folderSelectMode !== 'none') {
+      completeFolderSelect(folderPath)
     }
-  }, [isAgentMode, activeTab])
+  }
 
   useEffect(() => {
     const checkAgent = async () => {
@@ -245,7 +204,6 @@ function App(): JSX.Element {
     checkAgent()
   }, [])
 
-  // Check Google connection status
   useEffect(() => {
     const checkGoogle = async () => {
       try {
@@ -259,14 +217,9 @@ function App(): JSX.Element {
       }
     }
     checkGoogle()
-
     const unsubSignedIn = window.api.google.onSignedIn(() => setIsGoogleConnected(true))
     const unsubSignedOut = window.api.google.onSignedOut(() => setIsGoogleConnected(false))
-
-    return () => {
-      unsubSignedIn()
-      unsubSignedOut()
-    }
+    return () => { unsubSignedIn(); unsubSignedOut() }
   }, [])
 
   useEffect(() => {
@@ -274,90 +227,59 @@ function App(): JSX.Element {
       try {
         const count = await window.api.pending.getCount()
         setPendingCount(count)
-        if (count > 0 && activeTab !== 'review' && activeTab !== 'agent') {
+        if (count > 0 && activeTab !== 'review' && !isAgentMode) {
           setActiveTab('review')
         }
-      } catch (err) {
-        console.error('Failed to check pending count:', err)
-      }
+      } catch (err) { console.error('Failed to check pending count:', err) }
     }
     checkPending()
     const interval = setInterval(checkPending, 2000)
     return () => clearInterval(interval)
-  }, [activeTab])
+  }, [activeTab, isAgentMode])
 
   useEffect(() => {
     const unsubNewAction = window.api.pending.onNewAction((action) => {
-      console.log('[UI] New pending action:', action.fileName)
       setPendingCount((prev) => prev + 1)
-      if (!isAgentMode) {
-        setActiveTab('review')
-      }
+      if (!isAgentMode) setActiveTab('review')
     })
     return () => unsubNewAction()
   }, [isAgentMode])
 
   useEffect(() => {
     const unsubFsChanged = window.api.fs.onChanged(async () => {
-      console.log('[UI] File system changed, refreshing folders...')
       for (const folder of folders) {
         try {
           const newEntries = await window.api.fs.listDir(folder.path)
           useAppStore.getState().updateFolderEntries(folder.path, newEntries)
-        } catch (err) {
-          console.error(`Failed to refresh folder ${folder.path}:`, err)
-        }
+        } catch (err) { console.error(`Failed to refresh folder ${folder.path}:`, err) }
       }
     })
     return () => unsubFsChanged()
   }, [folders])
 
   useEffect(() => {
-    const unsubChunk = window.api.agent.onStreamChunk((chunk) => {
-      setStreamingContent((prev) => prev + chunk)
-    })
-
-    const unsubEnd = window.api.agent.onStreamEnd(() => {
-      setIsStreaming(false)
-    })
-
+    const unsubChunk = window.api.agent.onStreamChunk((chunk) => setStreamingContent((prev) => prev + chunk))
+    const unsubEnd = window.api.agent.onStreamEnd(() => setIsStreaming(false))
     const unsubToolCall = window.api.agent.onToolCall((data) => {
-      console.log('[STREAM] Tool call:', data.name)
       const stepId = addTaskStep(data.name, data.args.path || data.args.source_path)
       ;(window as unknown as { __currentStepId: string }).__currentStepId = stepId
     })
-
     const unsubToolResult = window.api.agent.onToolResult((data) => {
-      console.log('[STREAM] Tool result:', data.name)
       const stepId = (window as unknown as { __currentStepId: string }).__currentStepId
       if (stepId) {
         const success = !(data.result as { error?: string })?.error
         updateTaskStep(stepId, { status: success ? 'completed' : 'error', result: data.result })
       }
     })
-
-    const unsubRoutingStart = window.api.agent.onRoutingStart(() => {
-      console.log('[UI] Router analyzing task...')
-      setCurrentClassification(null)
-    })
-
+    const unsubRoutingStart = window.api.agent.onRoutingStart(() => setCurrentClassification(null))
     const unsubRoutingComplete = window.api.agent.onRoutingComplete((classification) => {
-      console.log('[UI] Router complete:', classification)
       setCurrentClassification({
         taskType: classification.taskType,
         recommendedExecutor: classification.recommendedExecutor,
         complexityScore: classification.complexityScore
       })
     })
-
-    return () => {
-      unsubChunk()
-      unsubEnd()
-      unsubToolCall()
-      unsubToolResult()
-      unsubRoutingStart()
-      unsubRoutingComplete()
-    }
+    return () => { unsubChunk(); unsubEnd(); unsubToolCall(); unsubToolResult(); unsubRoutingStart(); unsubRoutingComplete() }
   }, [addTaskStep, updateTaskStep])
 
   useEffect(() => {
@@ -368,15 +290,12 @@ function App(): JSX.Element {
     const folderPath = await window.api.selectFolder()
     if (!folderPath) return
     if (folders.some((f) => f.path === folderPath)) return
-
     setIsLoading(true)
     try {
       const entries = await window.api.fs.listDir(folderPath)
       const folderName = folderPath.split(/[/\\]/).pop() || folderPath
       addFolder({ path: folderPath, name: folderName, entries, grantedAt: new Date().toISOString() })
-    } catch (err) {
-      console.error('Failed to load folder:', err)
-    }
+    } catch (err) { console.error('Failed to load folder:', err) }
     setIsLoading(false)
   }
 
@@ -387,27 +306,19 @@ function App(): JSX.Element {
   const handleSendMessage = async (messageOverride?: string) => {
     const userMessage = messageOverride || inputValue.trim()
     if (!userMessage || isProcessing) return
-
     setInputValue('')
     setStreamingContent('')
     setIsStreaming(true)
     setCurrentClassification(null)
-
     addMessage({ role: 'user', content: userMessage })
     setProcessing(true)
     startTask(userMessage)
-
     try {
-      const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map((m) => ({
-        role: m.role,
-        content: m.content
-      }))
+      const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map((m) => ({ role: m.role, content: m.content }))
       const grantedFolders = folders.map((f) => f.path)
       const response = await window.api.agent.chat(chatHistory, grantedFolders, selectedFile?.path)
-
       setIsStreaming(false)
       setStreamingContent('')
-
       if (response.error) {
         addMessage({ role: 'assistant', content: response.error, isError: true })
         completeTask('error')
@@ -421,22 +332,17 @@ function App(): JSX.Element {
       addMessage({ role: 'assistant', content: `Failed to get response: ${err}`, isError: true })
       completeTask('error')
     }
-
     setProcessing(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() }
   }
 
-  const handleTemplateSelect = (command: string) => {
-    handleSendMessage(command)
-  }
+  const handleTemplateSelect = (command: string) => handleSendMessage(command)
 
   const hasAnyFolder = folders.length > 0
+  const isSelectingFolder = folderSelectMode !== 'none'
 
   return (
     <div className={`h-screen flex flex-col bg-slate-900 ${isAgentMode ? 'agent-mode theme-transition' : 'theme-transition'}`}>
@@ -445,17 +351,10 @@ function App(): JSX.Element {
         <div className="flex items-center gap-3 no-drag">
           <Zap className={`w-5 h-5 ${isAgentMode ? 'text-emerald-500' : 'text-sky-500'}`} />
           <span className="font-semibold text-slate-100">Momentum</span>
-          
-          {/* Mode Tab Switcher - Now prominent! */}
           <div className="ml-4">
-            <ModeTabs 
-              isAgentMode={isAgentMode} 
-              onModeChange={handleModeChange}
-              agentStatus={agentStatus}
-            />
+            <ModeTabs isAgentMode={isAgentMode} onModeChange={handleModeChange} agentStatus={agentStatus} />
           </div>
         </div>
-
         <div className="ml-auto flex items-center gap-4 no-drag">
           <GoogleSignIn />
           <div className="w-px h-5 bg-slate-700" />
@@ -475,14 +374,12 @@ function App(): JSX.Element {
       {/* Main */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside className="bg-slate-800 border-r border-slate-700 flex flex-col" style={{ width: sidebarWidth }}>
+        <aside className={`bg-slate-800 border-r border-slate-700 flex flex-col transition-all ${isSelectingFolder ? 'ring-2 ring-emerald-500 ring-inset' : ''}`} style={{ width: sidebarWidth }}>
           <div className="p-3 border-b border-slate-700 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide">Files</h2>
-            <button
-              onClick={handleSelectFolder}
-              className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
-              title="Add folder"
-            >
+            <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide">
+              {isSelectingFolder ? '👆 Click a folder' : 'Files'}
+            </h2>
+            <button onClick={handleSelectFolder} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors" title="Add folder">
               <FolderPlus className="w-4 h-4" />
             </button>
           </div>
@@ -493,40 +390,45 @@ function App(): JSX.Element {
                 <span className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
-
             {!isLoading && folders.length === 0 && (
               <div className="p-4 text-center">
                 <p className="text-sm text-slate-500 mb-3">No folder selected</p>
-                <button onClick={handleSelectFolder} className="text-sm text-accent hover:text-accent-light">
-                  + Add a folder
-                </button>
+                <button onClick={handleSelectFolder} className="text-sm text-accent hover:text-accent-light">+ Add a folder</button>
               </div>
             )}
-
             {folders.map((folder) => (
               <div key={folder.path} className="border-b border-slate-700/50">
-                <div className="flex items-center gap-2 px-3 py-2 bg-slate-750 hover:bg-slate-700/30 group">
+                <div 
+                  className={`flex items-center gap-2 px-3 py-2 group cursor-pointer transition-colors ${
+                    isSelectingFolder 
+                      ? 'bg-emerald-900/30 hover:bg-emerald-800/40' 
+                      : 'bg-slate-750 hover:bg-slate-700/30'
+                  }`}
+                  onClick={() => isSelectingFolder ? handleFolderClickForAgent(folder.path) : null}
+                >
                   <FolderOpen className={`w-4 h-4 flex-shrink-0 ${isAgentMode ? 'text-emerald-400' : 'text-sky-400'}`} />
-                  <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>
-                    {folder.name}
-                  </span>
-                  <button
-                    onClick={() => removeFolder(folder.path)}
-                    className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-all"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>{folder.name}</span>
+                  {!isSelectingFolder && (
+                    <button onClick={(e) => { e.stopPropagation(); removeFolder(folder.path) }} className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-all">
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
-                <FileTree entries={folder.entries} onFileSelect={handleFileSelect} selectedPath={selectedFile?.path} />
+                <FileTree 
+                  entries={folder.entries} 
+                  onFileSelect={handleFileSelect} 
+                  selectedPath={selectedFile?.path}
+                  onFolderClick={isSelectingFolder ? handleFolderClickForAgent : undefined}
+                  highlightFolders={isSelectingFolder}
+                />
               </div>
             ))}
           </div>
 
-          {selectedFile && (
-            <div className={`p-2 border-t border-slate-700 ${isAgentMode ? 'bg-emerald-900/20' : 'bg-sky-900/20'}`}>
-              <div className={`text-xs truncate ${isAgentMode ? 'text-emerald-300' : 'text-sky-300'}`} title={selectedFile.path}>
-                <span className="text-slate-400">Selected: </span>
-                {selectedFile.name}
+          {selectedFile && !isAgentMode && (
+            <div className="p-2 border-t border-slate-700 bg-sky-900/20">
+              <div className="text-xs truncate text-sky-300" title={selectedFile.path}>
+                <span className="text-slate-400">Selected: </span>{selectedFile.name}
               </div>
             </div>
           )}
@@ -541,206 +443,114 @@ function App(): JSX.Element {
           )}
         </aside>
 
-        {/* Chat */}
-        <main className={`flex-1 flex flex-col ${isAgentMode ? 'agent-bg' : 'bg-slate-900'}`}>
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="max-w-3xl mx-auto space-y-4">
-              {messages.length === 0 && !isStreaming ? (
-                <div className="text-center py-12">
-                  <Zap className={`w-12 h-12 mx-auto mb-4 ${isAgentMode ? 'text-emerald-500' : 'text-sky-500'}`} />
-                  <h1 className="text-2xl font-bold text-slate-100 mb-2">
-                    {isAgentMode ? 'Agent Mode Active' : hasAnyFolder ? 'Ready to help!' : 'Welcome to Momentum'}
-                  </h1>
-                  <p className="text-slate-400 mb-6">
-                    {isAgentMode
-                      ? 'Configure the watcher in the right panel to automatically process files.'
-                      : hasAnyFolder
-                      ? `${folders.length} folder${folders.length > 1 ? 's' : ''} loaded. Ask me to organize, extract data, or create reports.`
-                      : 'Your AI-powered desktop assistant. Grant folder access to get started.'}
-                  </p>
-                  {!hasAnyFolder && !isAgentMode && (
+        {/* Main Content Area */}
+        {isAgentMode ? (
+          /* Agent Mode: Full-Width Workspace */
+          <AgentWorkspace />
+        ) : (
+          /* Chat Mode: Chat + Right Panel */
+          <>
+            <main className="flex-1 flex flex-col bg-slate-900">
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="max-w-3xl mx-auto space-y-4">
+                  {messages.length === 0 && !isStreaming ? (
+                    <div className="text-center py-12">
+                      <Zap className="w-12 h-12 mx-auto mb-4 text-sky-500" />
+                      <h1 className="text-2xl font-bold text-slate-100 mb-2">
+                        {hasAnyFolder ? 'Ready to help!' : 'Welcome to Momentum'}
+                      </h1>
+                      <p className="text-slate-400 mb-6">
+                        {hasAnyFolder
+                          ? `${folders.length} folder${folders.length > 1 ? 's' : ''} loaded. Ask me to organize, extract data, or create reports.`
+                          : 'Your AI-powered desktop assistant. Grant folder access to get started.'}
+                      </p>
+                      {!hasAnyFolder && (
+                        <>
+                          <button onClick={handleSelectFolder} className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg font-medium transition-colors">
+                            <FolderOpen className="w-4 h-4" />Select Folder
+                          </button>
+                          <div className="mt-8 p-4 bg-slate-800/50 rounded-lg border border-slate-700 text-left max-w-md mx-auto">
+                            <h3 className="text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+                              <Shield className="w-4 h-4 text-emerald-500" />Your files are safe
+                            </h3>
+                            <ul className="text-xs text-slate-400 space-y-1">
+                              <li>• Momentum only accesses folders you explicitly grant</li>
+                              <li>• All deletions go to trash with undo support</li>
+                              <li>• Destructive actions require your confirmation</li>
+                            </ul>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
                     <>
-                      <button
-                        onClick={handleSelectFolder}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg font-medium transition-colors"
-                      >
-                        <FolderOpen className="w-4 h-4" />
-                        Select Folder
-                      </button>
-                      <div className="mt-8 p-4 bg-slate-800/50 rounded-lg border border-slate-700 text-left max-w-md mx-auto">
-                        <h3 className="text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
-                          <Shield className="w-4 h-4 text-emerald-500" />
-                          Your files are safe
-                        </h3>
-                        <ul className="text-xs text-slate-400 space-y-1">
-                          <li>• Momentum only accesses folders you explicitly grant</li>
-                          <li>• All deletions go to trash with undo support</li>
-                          <li>• Destructive actions require your confirmation</li>
-                        </ul>
-                      </div>
+                      {messages.map((msg) => (<ChatMessage key={msg.id} message={msg} />))}
+                      {isProcessing && (
+                        <div className="flex gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center"><Bot className="w-4 h-4" /></div>
+                          <div className="space-y-2">
+                            <RoutingIndicator classification={currentClassification} />
+                            {streamingContent ? (
+                              <div className="px-4 py-2 bg-slate-800 rounded-lg text-sm text-slate-100">
+                                <div className="space-y-1">{formatMessage(streamingContent)}<span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" /></div>
+                              </div>
+                            ) : currentClassification && (
+                              <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
+                                <span className="w-2 h-2 bg-accent rounded-full animate-pulse" /><span className="text-sm text-slate-400">Executing...</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
+                  <div ref={messagesEndRef} />
                 </div>
-              ) : (
-                <>
-                  {messages.map((msg) => (
-                    <ChatMessage key={msg.id} message={msg} />
-                  ))}
+              </div>
 
-                  {isProcessing && (
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-                        <Bot className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-2">
-                        <RoutingIndicator classification={currentClassification} />
-                        {streamingContent ? (
-                          <div className="px-4 py-2 bg-slate-800 rounded-lg text-sm text-slate-100">
-                            <div className="space-y-1">
-                              {formatMessage(streamingContent)}
-                              <span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" />
-                            </div>
-                          </div>
-                        ) : (
-                          currentClassification && (
-                            <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-                              <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-                              <span className="text-sm text-slate-400">Executing...</span>
-                            </div>
-                          )
-                        )}
-                      </div>
+              <div className="border-t border-slate-700 p-4">
+                <div className="max-w-3xl mx-auto">
+                  {hasAnyFolder && (
+                    <div className="mb-2">
+                      <button onClick={() => setShowTemplates(!showTemplates)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-400 mb-1">
+                        {showTemplates ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}Quick Actions
+                      </button>
+                      {showTemplates && <TaskTemplates onSelectTemplate={handleTemplateSelect} disabled={isProcessing} isGoogleConnected={isGoogleConnected} />}
                     </div>
                   )}
-                </>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Input with Templates */}
-          <div className="border-t border-slate-700 p-4">
-            <div className="max-w-3xl mx-auto">
-              {/* Task Templates */}
-              {hasAnyFolder && !isAgentMode && (
-                <div className="mb-2">
-                  <button
-                    onClick={() => setShowTemplates(!showTemplates)}
-                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-400 mb-1"
-                  >
-                    {showTemplates ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    Quick Actions
-                  </button>
-                  {showTemplates && (
-                    <TaskTemplates
-                      onSelectTemplate={handleTemplateSelect}
-                      disabled={isProcessing}
-                      isGoogleConnected={isGoogleConnected}
+                  <div className="bg-slate-800 rounded-lg border border-slate-700 flex items-center">
+                    <input
+                      type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleKeyDown}
+                      placeholder={hasAnyFolder ? (selectedFile ? `Ask about ${selectedFile.name}...` : 'Ask Momentum to organize files, extract data, create reports...') : 'Select a folder to get started...'}
+                      disabled={!hasAnyFolder || isProcessing}
+                      className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
                     />
-                  )}
+                    <button onClick={() => handleSendMessage()} disabled={!hasAnyFolder || !inputValue.trim() || isProcessing} className="p-2 m-1.5 bg-accent hover:bg-accent-dark disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-md transition-colors">
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              )}
-              
-              <div className="bg-slate-800 rounded-lg border border-slate-700 flex items-center">
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={
-                    isAgentMode
-                      ? 'Agent mode active - configure watcher in right panel'
-                      : hasAnyFolder
-                      ? selectedFile
-                        ? `Ask about ${selectedFile.name}...`
-                        : 'Ask Momentum to organize files, extract data, create reports...'
-                      : 'Select a folder to get started...'
-                  }
-                  disabled={!hasAnyFolder || isProcessing || isAgentMode}
-                  className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
-                />
-                <button
-                  onClick={() => handleSendMessage()}
-                  disabled={!hasAnyFolder || !inputValue.trim() || isProcessing || isAgentMode}
-                  className="p-2 m-1.5 bg-accent hover:bg-accent-dark disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-md transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
               </div>
-            </div>
-          </div>
-        </main>
+            </main>
 
-        {/* Right Panel */}
-        <aside className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col overflow-hidden">
-          <div className="flex border-b border-slate-700 flex-shrink-0">
-            {!isAgentMode && (
-              <>
-                <button
-                  onClick={() => setActiveTab('progress')}
-                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
-                    activeTab === 'progress' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  Progress
-                </button>
-                <button
-                  onClick={() => setActiveTab('review')}
-                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${
-                    activeTab === 'review' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'
-                  }`}
-                >
+            {/* Right Panel (Chat Mode Only) */}
+            <aside className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col overflow-hidden">
+              <div className="flex border-b border-slate-700 flex-shrink-0">
+                <button onClick={() => setActiveTab('progress')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${activeTab === 'progress' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>Progress</button>
+                <button onClick={() => setActiveTab('review')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${activeTab === 'review' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>
                   Review
-                  {pendingCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">
-                      {pendingCount}
-                    </span>
-                  )}
+                  {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">{pendingCount}</span>}
                 </button>
-                <button
-                  onClick={() => setActiveTab('metrics')}
-                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${
-                    activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  Stats
-                </button>
-              </>
-            )}
-            {isAgentMode && (
-              <div className="flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide text-emerald-400 flex items-center gap-2">
-                <Bot className="w-4 h-4" />
-                <span>Agent Control</span>
-                {agentStatus === 'running' && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 status-dot-pulse ml-auto" />
-                )}
+                <button onClick={() => setActiveTab('metrics')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>Stats</button>
               </div>
-            )}
-          </div>
-
-          {/* Panel Content */}
-          <div className="flex-1 overflow-y-auto">
-            {isAgentMode ? (
-              <AgentPanel />
-            ) : (
-              <>
+              <div className="flex-1 overflow-y-auto">
                 {activeTab === 'progress' && <ProgressPanel />}
-                {activeTab === 'review' && (
-                  <ReviewPanel
-                    onComplete={async () => {
-                      setPendingCount(0)
-                      for (const folder of folders) {
-                        const newEntries = await window.api.fs.listDir(folder.path)
-                        useAppStore.getState().updateFolderEntries(folder.path, newEntries)
-                      }
-                    }}
-                  />
-                )}
+                {activeTab === 'review' && <ReviewPanel onComplete={async () => { setPendingCount(0); for (const folder of folders) { const newEntries = await window.api.fs.listDir(folder.path); useAppStore.getState().updateFolderEntries(folder.path, newEntries) }}} />}
                 {activeTab === 'metrics' && <MetricsPanel />}
-              </>
-            )}
-          </div>
-        </aside>
+              </div>
+            </aside>
+          </>
+        )}
       </div>
     </div>
   )

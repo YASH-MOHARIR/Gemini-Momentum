@@ -41,24 +41,25 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
-  // Handle close button - Option C: Only minimize to tray if agent is running
+  // Handle close button - check for ANY running watchers
   mainWindow.on('close', async (event) => {
     if (isQuitting) return // Already quitting, let it close
 
-    const watcherStatus = fileWatcher.getWatcherStatus()
+    const allWatchers = fileWatcher.getAllWatchers()
+    const hasRunning = allWatchers.length > 0
     
-    // If agent is running, ask user what to do
-    if (watcherStatus.running) {
+    // If any agents are running, ask user what to do
+    if (hasRunning) {
       event.preventDefault()
       
       const { response } = await dialog.showMessageBox(mainWindow!, {
         type: 'question',
-        buttons: ['Minimize to Tray', 'Stop Agent & Quit', 'Cancel'],
+        buttons: ['Minimize to Tray', 'Stop All & Quit', 'Cancel'],
         defaultId: 0,
         cancelId: 2,
-        title: 'Agent Running',
-        message: 'Your AI agent is still running',
-        detail: 'The agent will continue organizing files in the background if you minimize to tray.'
+        title: 'Agents Running',
+        message: `You have ${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running`,
+        detail: 'Agents will continue organizing files in the background if you minimize to tray.'
       })
 
       if (response === 0) {
@@ -68,40 +69,60 @@ function createWindow(): void {
           tray.displayBalloon({
             iconType: 'info',
             title: 'Momentum',
-            content: 'Agent running in background. Right-click tray icon to control.'
+            content: `${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running in background.`
           })
         }
       } else if (response === 1) {
-        // Stop agent and quit
+        // Stop all agents and quit
         isQuitting = true
-        fileWatcher.stopWatcher()
+        fileWatcher.stopAllWatchers()
         mainWindow?.destroy()
       }
       // response === 2 (Cancel) - do nothing
     } else {
-      // Agent not running - quit normally
+      // No agents running - quit normally
       isQuitting = true
       mainWindow?.destroy()
     }
   })
 
-  // Handle minimize button - go to tray if agent is running
-  mainWindow.on('minimize', (event) => {
-    const watcherStatus = fileWatcher.getWatcherStatus()
+  // Handle minimize button - ask before minimizing to tray if agents running
+  mainWindow.on('minimize', async (event) => {
+    const allWatchers = fileWatcher.getAllWatchers()
+    const hasRunning = allWatchers.length > 0
     
-    if (watcherStatus.running) {
+    if (hasRunning) {
       event.preventDefault()
-      mainWindow?.hide()
       
-      if (tray && process.platform === 'win32') {
-        tray.displayBalloon({
-          iconType: 'info',
-          title: 'Momentum',
-          content: 'Agent running in background. Right-click tray icon to control.'
-        })
+      const { response } = await dialog.showMessageBox(mainWindow!, {
+        type: 'info',
+        buttons: ['Minimize to Tray', 'Minimize Normally', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        title: 'Agents Running',
+        message: `You have ${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running`,
+        detail: 'Minimize to tray to keep agents working in the background, or minimize normally to taskbar.'
+      })
+
+      if (response === 0) {
+        // Minimize to tray
+        mainWindow?.hide()
+        if (tray && process.platform === 'win32') {
+          tray.displayBalloon({
+            iconType: 'info',
+            title: 'Momentum',
+            content: `${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running in background.`
+          })
+        }
+      } else if (response === 1) {
+        // Minimize normally (let it minimize to taskbar)
+        // Don't preventDefault, let default minimize behavior happen
+        // Re-trigger the minimize since we already prevented it
+        mainWindow?.minimize()
       }
+      // response === 2 (Cancel) - do nothing
     }
-    // If agent not running, normal minimize behavior
+    // If no agents running, normal minimize behavior (let default happen)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -146,15 +167,23 @@ function createTray(): void {
 function updateTrayMenu(): void {
   if (!tray) return
 
-  const watcherStatus = fileWatcher.getWatcherStatus()
-  const isRunning = watcherStatus.running
-  const isPaused = watcherStatus.paused
+  const allWatchers = fileWatcher.getAllWatchers()
+  const hasRunning = allWatchers.length > 0
+  
+  // Count running vs paused
+  let runningCount = 0
+  let pausedCount = 0
+  for (const config of allWatchers) {
+    const status = fileWatcher.getWatcherStatus(config.id)
+    if (status.running && !status.paused) runningCount++
+    if (status.paused) pausedCount++
+  }
 
   let statusText = '⚪ Agent Idle'
-  if (isRunning && !isPaused) {
-    statusText = '🟢 Agent Running'
-  } else if (isRunning && isPaused) {
-    statusText = '🟡 Agent Paused'
+  if (runningCount > 0) {
+    statusText = `🟢 ${runningCount} Agent${runningCount > 1 ? 's' : ''} Running`
+  } else if (pausedCount > 0) {
+    statusText = `🟡 ${pausedCount} Agent${pausedCount > 1 ? 's' : ''} Paused`
   }
 
   const contextMenu = Menu.buildFromTemplate([
@@ -172,25 +201,11 @@ function updateTrayMenu(): void {
     },
     { type: 'separator' },
     {
-      label: isPaused ? 'Resume Agent' : 'Pause Agent',
-      enabled: isRunning,
-      click: async () => {
-        if (isPaused) {
-          fileWatcher.resumeWatcher()
-          mainWindow?.webContents.send('watcher:resumed')
-        } else {
-          fileWatcher.pauseWatcher()
-          mainWindow?.webContents.send('watcher:paused')
-        }
-        updateTrayMenu()
-      }
-    },
-    {
-      label: 'Stop Agent',
-      enabled: isRunning,
+      label: 'Stop All Agents',
+      enabled: hasRunning,
       click: () => {
-        fileWatcher.stopWatcher()
-        mainWindow?.webContents.send('watcher:stopped')
+        fileWatcher.stopAllWatchers()
+        mainWindow?.webContents.send('watcher:all-stopped')
         updateTrayMenu()
       }
     },
@@ -199,7 +214,7 @@ function updateTrayMenu(): void {
       label: 'Quit Momentum',
       click: () => {
         isQuitting = true
-        fileWatcher.stopWatcher()
+        fileWatcher.stopAllWatchers()
         app.quit()
       }
     }
@@ -436,30 +451,44 @@ ipcMain.handle('watcher:start', async (_, config: fileWatcher.AgentConfig) => {
   return result
 })
 
-ipcMain.handle('watcher:stop', () => {
-  const result = fileWatcher.stopWatcher()
+ipcMain.handle('watcher:stop', (_, watcherId: string) => {
+  const result = fileWatcher.stopWatcher(watcherId)
   updateTrayMenu() // Update tray when watcher stops
   return result
 })
 
-ipcMain.handle('watcher:pause', () => {
-  const result = fileWatcher.pauseWatcher()
+ipcMain.handle('watcher:stop-all', () => {
+  const result = fileWatcher.stopAllWatchers()
+  updateTrayMenu()
+  return result
+})
+
+ipcMain.handle('watcher:pause', (_, watcherId: string) => {
+  const result = fileWatcher.pauseWatcher(watcherId)
   updateTrayMenu() // Update tray when watcher pauses
   return result
 })
 
-ipcMain.handle('watcher:resume', () => {
-  const result = fileWatcher.resumeWatcher()
+ipcMain.handle('watcher:resume', (_, watcherId: string) => {
+  const result = fileWatcher.resumeWatcher(watcherId)
   updateTrayMenu() // Update tray when watcher resumes
   return result
 })
 
-ipcMain.handle('watcher:get-status', () => {
-  return fileWatcher.getWatcherStatus()
+ipcMain.handle('watcher:get-status', (_, watcherId?: string) => {
+  return fileWatcher.getWatcherStatus(watcherId)
 })
 
-ipcMain.handle('watcher:update-rules', (_, rules: fileWatcher.AgentRule[]) => {
-  return fileWatcher.updateRules(rules)
+ipcMain.handle('watcher:get-all', () => {
+  return fileWatcher.getAllWatchers()
+})
+
+ipcMain.handle('watcher:get-stats', (_, watcherId: string) => {
+  return fileWatcher.getWatcherStats(watcherId)
+})
+
+ipcMain.handle('watcher:update-rules', (_, watcherId: string, rules: fileWatcher.AgentRule[]) => {
+  return fileWatcher.updateRules(watcherId, rules)
 })
 
 // ============ App Lifecycle ============
@@ -512,19 +541,19 @@ app.whenReady().then(() => {
   })
 })
 
-// macOS: Keep running when window closed if agent is active
+// macOS: Keep running when window closed if any agents are active
 app.on('window-all-closed', () => {
-  const status = fileWatcher.getWatcherStatus()
+  const allWatchers = fileWatcher.getAllWatchers()
   
-  // Only keep running if agent is active
-  if (!status.running) {
+  // Only keep running if agents are active
+  if (allWatchers.length === 0) {
     app.quit()
   }
-  // If agent is running, keep app alive (tray icon handles control)
+  // If agents are running, keep app alive (tray icon handles control)
 })
 
 // Cleanup before quit
 app.on('before-quit', () => {
   isQuitting = true
-  fileWatcher.stopWatcher()
+  fileWatcher.stopAllWatchers()
 })
