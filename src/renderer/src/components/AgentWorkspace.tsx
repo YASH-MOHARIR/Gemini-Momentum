@@ -22,7 +22,13 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
-  Trash2
+  Trash2,
+  Download,
+  Camera,
+  Receipt,
+  FileImage,
+  Archive,
+  Sparkles
 } from 'lucide-react'
 import { useAgentStore, AgentConfig, AgentRule, ActivityEntry, WatcherState } from '../stores/agentStore'
 
@@ -38,6 +44,72 @@ const EXAMPLE_RULES = [
   "Screenshots to Screenshots folder",
   "Images to Pictures folder",
   "Code files to Code folder"
+]
+
+// ============ Watcher Templates ============
+
+interface WatcherTemplate {
+  id: string
+  name: string
+  icon: React.ReactNode
+  description: string
+  color: string
+  defaultFolder: string // Suggestion for folder name
+  rules: string[]
+}
+
+const WATCHER_TEMPLATES: WatcherTemplate[] = [
+  {
+    id: 'downloads',
+    name: 'Downloads Organizer',
+    icon: <Download className="w-4 h-4" />,
+    description: 'Sort files by type automatically',
+    color: 'bg-sky-600 hover:bg-sky-500',
+    defaultFolder: 'Downloads',
+    rules: [
+      'PDFs and documents to Documents folder',
+      'Images (jpg, png, gif) to Pictures folder',
+      'Videos (mp4, mov) to Videos folder',
+      'Archives (zip, rar) to Archives folder',
+      'Code files to Code folder'
+    ]
+  },
+  {
+    id: 'receipts',
+    name: 'Receipt Processor',
+    icon: <Receipt className="w-4 h-4" />,
+    description: 'AI-powered receipt organization',
+    color: 'bg-emerald-600 hover:bg-emerald-500',
+    defaultFolder: 'Receipts',
+    rules: [
+      'All images to Expenses folder, rename with vendor, date, and amount',
+      'PDFs to Invoices folder'
+    ]
+  },
+  {
+    id: 'screenshots',
+    name: 'Screenshot Manager',
+    icon: <Camera className="w-4 h-4" />,
+    description: 'Keep desktop clean',
+    color: 'bg-purple-600 hover:bg-purple-500',
+    defaultFolder: 'Desktop',
+    rules: [
+      'Screenshots to Screenshots folder',
+      'Screen recordings to Recordings folder'
+    ]
+  },
+  {
+    id: 'documents',
+    name: 'Document Filer',
+    icon: <FileText className="w-4 h-4" />,
+    description: 'Archive old documents',
+    color: 'bg-amber-600 hover:bg-amber-500',
+    defaultFolder: 'Documents',
+    rules: [
+      'Files older than 6 months to Archive folder',
+      'Large files over 100MB to LargeFiles folder'
+    ]
+  }
 ]
 
 // ============ Helper Functions ============
@@ -122,6 +194,39 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
   )
 }
 
+// ============ Template Selector Component ============
+
+function TemplateSelector({ onSelectTemplate }: { onSelectTemplate: (template: WatcherTemplate) => void }) {
+  return (
+    <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Sparkles className="w-5 h-5 text-amber-400" />
+        <h3 className="text-sm font-medium text-slate-200">Quick Start Templates</h3>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">
+        Choose a template to get started quickly, or create a custom watcher
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {WATCHER_TEMPLATES.map((template) => (
+          <button
+            key={template.id}
+            onClick={() => onSelectTemplate(template)}
+            className={`flex items-center gap-3 p-3 rounded-lg ${template.color} text-white text-left transition-all hover:scale-[1.02] active:scale-[0.98]`}
+          >
+            <div className="p-2 bg-white/20 rounded-lg">
+              {template.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium">{template.name}</div>
+              <div className="text-xs opacity-80 truncate">{template.description}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ============ Watcher Card Component ============
 
 function WatcherCard({ watcherId }: { watcherId: string }) {
@@ -189,7 +294,6 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   }, [watcherId])
 
   const handleStart = async () => {
-    // Make sure config is up to date with local state
     const activeRules = localRules.filter(r => r.text.trim())
     const logPath = localWatchFolder + (localWatchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
     
@@ -203,7 +307,6 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
     
     const result = await window.api.watcher.start(startConfig)
     if (result.success) {
-      // Update store with final config
       updateWatcherConfig(watcherId, startConfig)
       setWatcherStatus(watcherId, 'running')
       setIsExpanded(true)
@@ -275,9 +378,7 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   const handleBrowseFolder = async () => {
     const folder = await window.api.selectFolder()
     if (folder) {
-      console.log('[WATCHER CARD] Folder selected via Browse:', folder)
       setLocalWatchFolder(folder)
-      // Also update the store immediately for better UX
       updateWatcherConfig(watcherId, { watchFolder: folder })
     }
   }
@@ -415,7 +516,6 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
           {/* Config Editor (when editing) */}
           {isEditing && !isRunning && (
             <div className="p-3 space-y-3 bg-slate-900/30">
-              {/* Helper text for new watchers */}
               {!localWatchFolder && (
                 <div className="p-2 bg-emerald-900/20 border border-emerald-800/30 rounded text-xs text-emerald-300">
                   <strong>Getting Started:</strong> Select a folder to watch, add rules describing what should happen to files, then click Start.
@@ -570,11 +670,13 @@ export default function AgentWorkspace() {
     createWatcher,
     canAddWatcher,
     folderSelectMode,
-    cancelFolderSelect
+    cancelFolderSelect,
+    updateWatcherConfig
   } = useAgentStore()
 
   const watcherIds = Array.from(watchers.keys())
   const isSelectingFolder = folderSelectMode !== 'none'
+  const [showTemplates, setShowTemplates] = useState(watcherIds.length === 0)
 
   const handleCreateWatcher = () => {
     const newId = `watcher-${Date.now()}`
@@ -586,6 +688,39 @@ export default function AgentWorkspace() {
       logPath: ''
     }
     createWatcher(newConfig)
+    setShowTemplates(false)
+  }
+
+  const handleSelectTemplate = async (template: WatcherTemplate) => {
+    // Create watcher with template rules
+    const newId = `watcher-${Date.now()}`
+    const rules: AgentRule[] = template.rules.map((text, index) => ({
+      id: `rule-${Date.now()}-${index}`,
+      text,
+      enabled: true,
+      order: index
+    }))
+
+    const newConfig: AgentConfig = {
+      id: newId,
+      watchFolder: '', // Will be set by user
+      rules,
+      enableActivityLog: true,
+      logPath: ''
+    }
+    
+    createWatcher(newConfig)
+    setShowTemplates(false)
+    
+    // Optionally prompt for folder immediately
+    const folder = await window.api.selectFolder()
+    if (folder) {
+      const logPath = folder + (folder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
+      updateWatcherConfig(newId, { 
+        watchFolder: folder,
+        logPath
+      })
+    }
   }
 
   return (
@@ -623,18 +758,38 @@ export default function AgentWorkspace() {
               </p>
             </div>
             
-            <button
-              onClick={handleCreateWatcher}
-              disabled={!canAddWatcher()}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              New Watcher
-            </button>
+            <div className="flex items-center gap-2">
+              {watcherIds.length > 0 && (
+                <button
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${
+                    showTemplates 
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                      : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Templates
+                </button>
+              )}
+              <button
+                onClick={handleCreateWatcher}
+                disabled={!canAddWatcher()}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Custom
+              </button>
+            </div>
           </div>
 
+          {/* Template Selector */}
+          {(showTemplates || watcherIds.length === 0) && canAddWatcher() && (
+            <TemplateSelector onSelectTemplate={handleSelectTemplate} />
+          )}
+
           {/* Watcher List */}
-          {watcherIds.length === 0 ? (
+          {watcherIds.length === 0 && !showTemplates ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mb-4">
                 <Folder className="w-8 h-8 text-slate-500" />
@@ -646,11 +801,11 @@ export default function AgentWorkspace() {
                 Create your first AI agent to start automatically organizing files
               </p>
               <button
-                onClick={handleCreateWatcher}
+                onClick={() => setShowTemplates(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
               >
-                <Plus className="w-5 h-5" />
-                Create First Watcher
+                <Sparkles className="w-5 h-5" />
+                Choose a Template
               </button>
             </div>
           ) : (
