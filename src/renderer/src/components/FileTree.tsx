@@ -13,14 +13,14 @@ import {
   Check,
   MousePointer
 } from 'lucide-react'
-import { FileEntry } from '../stores/appStore'
+import { FileEntry, useAppStore, HighlightType } from '../stores/appStore'
 
 interface FileTreeProps {
   entries: FileEntry[]
   onFileSelect?: (entry: FileEntry) => void
   selectedPath?: string
-  onFolderClick?: (folderPath: string) => void  // For agent mode folder selection
-  highlightFolders?: boolean  // Visual indication for selection mode
+  onFolderClick?: (folderPath: string) => void
+  highlightFolders?: boolean
 }
 
 interface FileTreeItemProps {
@@ -58,10 +58,30 @@ function formatSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+// Get highlight classes based on type
+function getHighlightClasses(highlightType: HighlightType | null): string {
+  if (!highlightType) return ''
+  
+  switch (highlightType) {
+    case 'delete':
+      return 'animate-highlight-delete bg-red-500/30 border-l-2 border-red-500'
+    case 'new':
+      return 'animate-highlight-new bg-emerald-500/30 border-l-2 border-emerald-500'
+    case 'update':
+      return 'animate-highlight-update bg-blue-500/30 border-l-2 border-blue-500'
+    default:
+      return ''
+  }
+}
+
 function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick, highlightFolders }: FileTreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[]>(entry.children || [])
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Get highlight state from store
+  const highlightedFiles = useAppStore((state) => state.highlightedFiles)
+  const highlightType = highlightedFiles.find(h => h.path === entry.path && h.expiresAt > Date.now())?.type || null
   
   useEffect(() => {
     if (entry.children) {
@@ -91,14 +111,12 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
     : getFileIcon(entry.name)
 
   const handleClick = async (e: React.MouseEvent) => {
-    // If in folder selection mode and this is a folder, use the folder click handler
     if (highlightFolders && isFolder && onFolderClick) {
       e.stopPropagation()
       onFolderClick(entry.path)
       return
     }
 
-    // Normal behavior
     if (isFolder) {
       if (!isExpanded && children.length === 0) {
         setIsLoading(true)
@@ -115,16 +133,30 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
     onFileSelect?.(entry)
   }
 
-  // Determine styling based on mode
+  // Determine styling based on mode and highlight
   const getItemStyles = () => {
+    // Highlight takes priority
+    if (highlightType) {
+      return getHighlightClasses(highlightType)
+    }
+    
     if (highlightFolders && isFolder) {
-      // Folder selection mode - highlight folders
       return 'bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-200 border-l-2 border-emerald-500 cursor-pointer'
     }
     if (isSelected) {
       return 'bg-sky-600/20 text-sky-100 border-l-2 border-sky-500'
     }
     return 'hover:bg-slate-700/50 text-slate-300 border-l-2 border-transparent'
+  }
+
+  // Get icon color based on highlight
+  const getIconColor = () => {
+    if (highlightType === 'delete') return 'text-red-400'
+    if (highlightType === 'new') return 'text-emerald-400'
+    if (highlightType === 'update') return 'text-blue-400'
+    if (highlightFolders && isFolder) return 'text-emerald-400'
+    if (isFolder) return 'text-sky-400'
+    return 'text-slate-400'
   }
 
   return (
@@ -148,18 +180,27 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
           ) : null}
         </span>
         
-        <FileIcon className={`w-4 h-4 flex-shrink-0 ${
-          highlightFolders && isFolder 
-            ? 'text-emerald-400' 
-            : isFolder 
-              ? 'text-sky-400' 
-              : 'text-slate-400'
-        }`} />
+        <FileIcon className={`w-4 h-4 flex-shrink-0 ${getIconColor()}`} />
         
-        <span className="truncate text-sm flex-1">{entry.name}</span>
+        <span className={`truncate text-sm flex-1 ${
+          highlightType === 'delete' ? 'text-red-200 line-through' : ''
+        }`}>
+          {entry.name}
+        </span>
+        
+        {/* Highlight indicator */}
+        {highlightType && (
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+            highlightType === 'delete' ? 'bg-red-500/50 text-red-100' :
+            highlightType === 'new' ? 'bg-emerald-500/50 text-emerald-100' :
+            'bg-blue-500/50 text-blue-100'
+          }`}>
+            {highlightType === 'delete' ? 'DEL' : highlightType === 'new' ? 'NEW' : 'UPD'}
+          </span>
+        )}
         
         {/* Selected indicator */}
-        {isSelected && !highlightFolders && (
+        {isSelected && !highlightFolders && !highlightType && (
           <Check className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
         )}
         
@@ -168,14 +209,13 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
           <span className="text-xs text-emerald-400 flex-shrink-0">Click</span>
         )}
         
-        {!isFolder && !isSelected && !highlightFolders && (
+        {!isFolder && !isSelected && !highlightFolders && !highlightType && (
           <span className="text-xs text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatSize(entry.size)}
           </span>
         )}
       </div>
       
-      {/* Show children if expanded (and not in folder selection mode, to keep UI simple) */}
       {isFolder && isExpanded && !highlightFolders && children.length > 0 && (
         <div>
           {children.map((child) => (

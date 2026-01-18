@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, Trash2, Check, X, RefreshCw, FileWarning } from 'lucide-react'
+import { AlertTriangle, Trash2, Check, X, RefreshCw, FileWarning, CheckCircle } from 'lucide-react'
+import { useAppStore } from '../stores/appStore'
 
 interface PendingAction {
   id: string
@@ -19,6 +20,17 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
+// Truncate path to show just filename, with folder hint
+function truncatePath(fullPath: string, fileName: string): string {
+  // Get parent folder name
+  const parts = fullPath.split(/[/\\]/)
+  const parentIndex = parts.length - 2
+  if (parentIndex >= 0) {
+    return `.../${parts[parentIndex]}/${fileName}`
+  }
+  return fileName
+}
+
 interface ReviewPanelProps {
   onComplete?: () => void
 }
@@ -28,6 +40,9 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(false)
   const [isExecuting, setIsExecuting] = useState(false)
+  
+  const highlightFiles = useAppStore((state) => state.highlightFiles)
+  const refreshFolder = useAppStore((state) => state.refreshFolder)
 
   const fetchActions = async () => {
     setIsLoading(true)
@@ -44,19 +59,21 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
 
   useEffect(() => {
     fetchActions()
-    // Poll for updates
     const interval = setInterval(fetchActions, 3000)
     return () => clearInterval(interval)
   }, [])
 
+  // Toggle single item - clicking anywhere on card
   const toggleSelection = (id: string) => {
-    const newSelected = new Set(selectedIds)
-    if (newSelected.has(id)) {
-      newSelected.delete(id)
-    } else {
-      newSelected.add(id)
-    }
-    setSelectedIds(newSelected)
+    setSelectedIds(prev => {
+      const newSelected = new Set(prev)
+      if (newSelected.has(id)) {
+        newSelected.delete(id)
+      } else {
+        newSelected.add(id)
+      }
+      return newSelected
+    })
   }
 
   const selectAll = () => {
@@ -72,7 +89,25 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
 
     setIsExecuting(true)
     try {
+      // Get paths of files being deleted for highlighting
+      const selectedActions = actions.filter(a => selectedIds.has(a.id))
+      const paths = selectedActions.map(a => a.sourcePath)
+      
+      // Highlight files in red before deleting
+      highlightFiles(paths, 'delete', 3000)
+      
+      // Wait a moment for visual feedback, then delete
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       await window.api.pending.executeSelected(Array.from(selectedIds))
+      
+      // Refresh folder to show changes
+      if (selectedActions.length > 0) {
+        const firstPath = selectedActions[0].sourcePath
+        const folderPath = firstPath.substring(0, firstPath.lastIndexOf(/[/\\]/.test(firstPath) ? (firstPath.includes('\\') ? '\\' : '/') : '/'))
+        await refreshFolder(folderPath)
+      }
+      
       await fetchActions()
       onComplete?.()
     } catch (err) {
@@ -84,7 +119,19 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
   const handleDeleteAll = async () => {
     setIsExecuting(true)
     try {
+      const paths = actions.map(a => a.sourcePath)
+      highlightFiles(paths, 'delete', 3000)
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       await window.api.pending.executeAll()
+      
+      if (actions.length > 0) {
+        const firstPath = actions[0].sourcePath
+        const folderPath = firstPath.substring(0, firstPath.lastIndexOf(/[/\\]/.test(firstPath) ? (firstPath.includes('\\') ? '\\' : '/') : '/'))
+        await refreshFolder(folderPath)
+      }
+      
       await fetchActions()
       onComplete?.()
     } catch (err) {
@@ -105,7 +152,8 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
     setIsExecuting(false)
   }
 
-  const handleKeepOne = async (id: string) => {
+  const handleKeepOne = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation() // Don't toggle selection
     try {
       await window.api.pending.removeOne(id)
       await fetchActions()
@@ -155,83 +203,113 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
       <div className="px-3 py-2 border-b border-slate-700 flex items-center gap-2 text-xs">
         <button
           onClick={selectAll}
-          className="text-sky-400 hover:text-sky-300"
+          className={`px-2 py-1 rounded transition-colors ${
+            selectedIds.size === actions.length 
+              ? 'bg-sky-600 text-white' 
+              : 'text-sky-400 hover:text-sky-300 hover:bg-slate-700'
+          }`}
         >
-          Select all
+          Select All
         </button>
-        <span className="text-slate-600">|</span>
         <button
           onClick={selectNone}
-          className="text-sky-400 hover:text-sky-300"
+          className={`px-2 py-1 rounded transition-colors ${
+            selectedIds.size === 0 
+              ? 'bg-slate-600 text-white' 
+              : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700'
+          }`}
         >
-          Select none
+          Select None
         </button>
         <span className="ml-auto text-slate-500">
-          {selectedIds.size} selected ({formatSize(selectedSize)})
+          {selectedIds.size}/{actions.length} ({formatSize(selectedSize)})
         </span>
       </div>
 
-      {/* File list */}
+      {/* File list - clickable cards */}
       <div className="flex-1 overflow-y-auto">
-        {actions.map((action) => (
-          <div
-            key={action.id}
-            className={`px-3 py-2 border-b border-slate-700/50 flex items-center gap-2 hover:bg-slate-700/30 ${
-              selectedIds.has(action.id) ? 'bg-slate-700/20' : ''
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={selectedIds.has(action.id)}
-              onChange={() => toggleSelection(action.id)}
-              className="rounded border-slate-600 bg-slate-700 text-sky-500 focus:ring-sky-500 focus:ring-offset-0"
-            />
-            <FileWarning className="w-4 h-4 text-amber-500 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-slate-200 truncate" title={action.sourcePath}>
-                {action.fileName}
-              </p>
-              <p className="text-xs text-slate-500">
-                {formatSize(action.fileSize)}
-                {action.reason && <span className="ml-2">• {action.reason}</span>}
-              </p>
-            </div>
-            <button
-              onClick={() => handleKeepOne(action.id)}
-              className="p-1 rounded hover:bg-slate-600 text-slate-400 hover:text-emerald-400"
-              title="Keep this file"
+        {actions.map((action) => {
+          const isSelected = selectedIds.has(action.id)
+          return (
+            <div
+              key={action.id}
+              onClick={() => toggleSelection(action.id)}
+              className={`px-3 py-2.5 border-b border-slate-700/50 flex items-center gap-3 cursor-pointer transition-all ${
+                isSelected 
+                  ? 'bg-red-900/30 hover:bg-red-900/40 border-l-2 border-red-500' 
+                  : 'bg-slate-800/30 hover:bg-slate-700/50 border-l-2 border-transparent'
+              }`}
             >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+              {/* Selection indicator */}
+              <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
+                isSelected 
+                  ? 'bg-red-500 text-white' 
+                  : 'bg-slate-700 border border-slate-600'
+              }`}>
+                {isSelected && <Check className="w-3 h-3" />}
+              </div>
+              
+              <FileWarning className={`w-4 h-4 flex-shrink-0 ${
+                isSelected ? 'text-red-400' : 'text-amber-500'
+              }`} />
+              
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm truncate ${
+                  isSelected ? 'text-red-200' : 'text-slate-200'
+                }`} title={action.sourcePath}>
+                  {action.fileName}
+                </p>
+                <p className="text-xs text-slate-500 truncate" title={action.sourcePath}>
+                  {truncatePath(action.sourcePath, action.fileName)}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {formatSize(action.fileSize)}
+                  {action.reason && (
+                    <span className="ml-1 text-slate-600">• {action.reason.split('\n')[0].substring(0, 30)}...</span>
+                  )}
+                </p>
+              </div>
+              
+              <button
+                onClick={(e) => handleKeepOne(e, action.id)}
+                className="p-1.5 rounded hover:bg-slate-600 text-slate-400 hover:text-emerald-400 transition-colors flex-shrink-0"
+                title="Keep this file (remove from list)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       {/* Action buttons */}
       <div className="p-3 border-t border-slate-700 space-y-2">
-        <div className="flex gap-2">
-          <button
-            onClick={handleDeleteSelected}
-            disabled={selectedIds.size === 0 || isExecuting}
-            className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm rounded flex items-center justify-center gap-2"
-          >
+        <button
+          onClick={handleDeleteSelected}
+          disabled={selectedIds.size === 0 || isExecuting}
+          className="w-full px-3 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
+        >
+          {isExecuting ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
             <Trash2 className="w-4 h-4" />
-            Delete Selected ({selectedIds.size})
-          </button>
-        </div>
+          )}
+          Delete Selected ({selectedIds.size})
+        </button>
+        
         <div className="flex gap-2">
           <button
             onClick={handleKeepAll}
             disabled={isExecuting}
-            className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm rounded flex items-center justify-center gap-2"
+            className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm rounded-lg flex items-center justify-center gap-2 transition-colors"
           >
-            <Check className="w-4 h-4" />
+            <CheckCircle className="w-4 h-4" />
             Keep All
           </button>
           <button
             onClick={handleDeleteAll}
             disabled={isExecuting}
-            className="flex-1 px-3 py-2 bg-red-900/50 hover:bg-red-900 text-red-300 text-sm rounded flex items-center justify-center gap-2 border border-red-800"
+            className="flex-1 px-3 py-2 bg-red-900/50 hover:bg-red-900 text-red-300 text-sm rounded-lg flex items-center justify-center gap-2 border border-red-800 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
             Delete All

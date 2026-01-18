@@ -192,3 +192,62 @@ body {
 .hover\:bg-accent-dark:hover {
   background-color: rgb(var(--accent-dark));
 }
+
+/* Add these animations to your src/renderer/src/assets/main.css */
+
+/* ============ File Highlight Animations (3 seconds) ============ */
+
+/* Delete - Red pulse */
+@keyframes highlight-delete {
+  0%, 100% {
+    background-color: rgba(239, 68, 68, 0.3);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.5);
+    box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.animate-highlight-delete {
+  animation: highlight-delete 1s ease-in-out 3;
+}
+
+/* New file - Green pulse */
+@keyframes highlight-new {
+  0%, 100% {
+    background-color: rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    background-color: rgba(16, 185, 129, 0.5);
+    box-shadow: 0 0 8px 2px rgba(16, 185, 129, 0.4);
+  }
+}
+
+.animate-highlight-new {
+  animation: highlight-new 1s ease-in-out 3;
+}
+
+/* Update - Blue pulse */
+@keyframes highlight-update {
+  0%, 100% {
+    background-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 8px 2px rgba(59, 130, 246, 0.4);
+  }
+}
+
+.animate-highlight-update {
+  animation: highlight-update 1s ease-in-out 3;
+}
+
+/* Smooth transition for highlight removal */
+.animate-highlight-delete,
+.animate-highlight-new,
+.animate-highlight-update {
+  transition: all 0.3s ease-out;
+}

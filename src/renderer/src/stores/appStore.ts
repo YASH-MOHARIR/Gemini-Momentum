@@ -33,15 +33,15 @@ export interface Message {
 
 export interface TaskStep {
   id: string
-  description: string  // Tool name
+  description: string
   status: 'pending' | 'running' | 'completed' | 'error'
-  detail?: string      // File path or other context
+  detail?: string
   result?: unknown
 }
 
 export interface Task {
   id: string
-  description: string  // User's original request
+  description: string
   status: 'running' | 'completed' | 'error'
   steps: TaskStep[]
   startedAt: string
@@ -79,6 +79,16 @@ export interface StorageAnalysisData {
   scannedAt: string
 }
 
+// ============ File Highlighting Types ============
+
+export type HighlightType = 'delete' | 'new' | 'update'
+
+export interface HighlightedFile {
+  path: string
+  type: HighlightType
+  expiresAt: number
+}
+
 interface AppState {
   // Folders
   folders: GrantedFolder[]
@@ -98,11 +108,15 @@ interface AppState {
   // Storage Analysis
   storageAnalysis: StorageAnalysisData | null
   
+  // File Highlighting
+  highlightedFiles: HighlightedFile[]
+  
   // Actions - Folders
   addFolder: (folder: GrantedFolder) => void
   removeFolder: (path: string) => void
   updateFolderEntries: (path: string, entries: FileEntry[]) => void
   setSelectedFile: (file: FileEntry | null) => void
+  refreshFolder: (path: string) => Promise<void>
   
   // Actions - Chat
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void
@@ -121,6 +135,11 @@ interface AppState {
   
   // Actions - Storage
   setStorageAnalysis: (data: StorageAnalysisData | null) => void
+  
+  // Actions - Highlighting
+  highlightFiles: (paths: string[], type: HighlightType, duration?: number) => void
+  clearHighlights: () => void
+  getHighlightType: (path: string) => HighlightType | null
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11)
@@ -135,6 +154,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   taskHistory: [],
   isAgentReady: false,
   storageAnalysis: null,
+  highlightedFiles: [],
 
   // Folder actions
   addFolder: (folder) => {
@@ -159,6 +179,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setSelectedFile: (file) => set({ selectedFile: file }),
+
+  refreshFolder: async (folderPath: string) => {
+    const { folders } = get()
+    for (const folder of folders) {
+      if (folderPath.startsWith(folder.path)) {
+        try {
+          const newEntries = await window.api.fs.listDir(folder.path)
+          get().updateFolderEntries(folder.path, newEntries)
+        } catch (err) {
+          console.error('Failed to refresh folder:', err)
+        }
+        break
+      }
+    }
+  },
 
   // Chat actions
   addMessage: (message) => {
@@ -250,5 +285,40 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAgentReady: (ready) => set({ isAgentReady: ready }),
   
   // Storage actions
-  setStorageAnalysis: (data) => set({ storageAnalysis: data })
+  setStorageAnalysis: (data) => set({ storageAnalysis: data }),
+  
+  // Highlighting actions
+  highlightFiles: (paths, type, duration = 3000) => {
+    const expiresAt = Date.now() + duration
+    const newHighlights: HighlightedFile[] = paths.map(path => ({
+      path,
+      type,
+      expiresAt
+    }))
+    
+    // Merge with existing highlights (replace if same path)
+    const { highlightedFiles } = get()
+    const existingPaths = new Set(paths)
+    const filtered = highlightedFiles.filter(h => !existingPaths.has(h.path))
+    
+    set({ highlightedFiles: [...filtered, ...newHighlights] })
+    
+    // Auto-clear after duration
+    setTimeout(() => {
+      const { highlightedFiles } = get()
+      const now = Date.now()
+      set({
+        highlightedFiles: highlightedFiles.filter(h => h.expiresAt > now)
+      })
+    }, duration + 100)
+  },
+  
+  clearHighlights: () => set({ highlightedFiles: [] }),
+  
+  getHighlightType: (path) => {
+    const { highlightedFiles } = get()
+    const now = Date.now()
+    const highlight = highlightedFiles.find(h => h.path === path && h.expiresAt > now)
+    return highlight?.type || null
+  }
 }))
