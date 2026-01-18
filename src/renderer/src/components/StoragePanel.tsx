@@ -158,50 +158,91 @@ export default function StoragePanel() {
             <FileText className="w-4 h-4 text-sky-400" />
             Storage by Type
           </h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={data.byType} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-              <XAxis dataKey="type" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-              <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} tickFormatter={(value) => formatBytes(value, 0)} />
-              <Tooltip
-                formatter={(value) => formatBytes(value as number)}
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', fontSize: '11px' }}
-                itemStyle={{ color: '#e2e8f0' }}
-              />
-              <Bar dataKey="size" name="Size" radius={[4, 4, 0, 0]}>
-                {data.byType.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ width: '100%', height: 250 }}>
+            <ResponsiveContainer>
+              <BarChart 
+                data={data.byType} 
+                margin={{ top: 20, right: 15, left: 10, bottom: 70 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                <XAxis 
+                  dataKey="type" 
+                  angle={-45}
+                  textAnchor="end"
+                  interval={0}
+                  height={60}
+                  tick={{ fill: '#e2e8f0', fontSize: 12 }}
+                  stroke="#94a3b8"
+                />
+                <YAxis 
+                  tick={{ fill: '#e2e8f0', fontSize: 11 }} 
+                  tickFormatter={(value) => formatBytes(value, 0)}
+                  stroke="#94a3b8"
+                />
+                <Tooltip
+                  formatter={(value) => formatBytes(value as number)}
+                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', fontSize: '11px', color: '#e2e8f0' }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  labelStyle={{ color: '#cbd5e1' }}
+                />
+                <Bar dataKey="size" name="Size" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                  {data.byType.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Pie Chart */}
         <div className="bg-slate-800 rounded-lg p-3">
           <h3 className="text-xs font-semibold text-slate-300 mb-3">Distribution</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie
-                data={data.byType}
-                dataKey="size"
-                nameKey="type"
-                cx="50%"
-                cy="50%"
-                outerRadius={70}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                labelStyle={{ fontSize: '10px', fill: '#e2e8f0' }}
-              >
-                {data.byType.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value) => formatBytes(value as number)}
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', fontSize: '11px' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          <div style={{ width: '100%', height: 240 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={data.byType}
+                  dataKey="size"
+                  nameKey="type"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={70}
+                  fill="#8884d8"
+                  label={({ cx, cy, midAngle, innerRadius, outerRadius, type, percentage }) => {
+                    const RADIAN = Math.PI / 180
+                    const radius = outerRadius + 25
+                    const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                    const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                    
+                    return (
+                      <text 
+                        x={x} 
+                        y={y} 
+                        fill="#e2e8f0" 
+                        textAnchor={x > cx ? 'start' : 'end'} 
+                        dominantBaseline="central"
+                        fontSize="11"
+                        fontWeight="500"
+                      >
+                        {`${type} ${percentage.toFixed(0)}%`}
+                      </text>
+                    )
+                  }}
+                  labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                >
+                  {data.byType.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value) => formatBytes(value as number)}
+                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', fontSize: '11px', color: '#e2e8f0' }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Largest Files */}

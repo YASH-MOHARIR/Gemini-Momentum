@@ -28,15 +28,31 @@ export interface AgentResponse {
 
 // ============ SYSTEM INSTRUCTION BUILDER ============
 
-function buildSystemInstruction(workingFolder: string, selectedFile?: string): string {
-  const selectedFileContext = selectedFile
-    ? `\n\nCURRENTLY SELECTED FILE: ${selectedFile}
-When the user says "this file", "the file", "it", or similar, they mean: ${selectedFile}`
-    : ''
+function buildSystemInstruction(workingFolder: string, selectedFile?: string, isDirectory?: boolean): string {
+  let selectedContext = ''
+  let targetFolder = workingFolder
+  
+  if (selectedFile) {
+    if (isDirectory) {
+      // Selected a folder - use it as the target
+      targetFolder = selectedFile
+      selectedContext = `\n\nSELECTED FOLDER: ${selectedFile}
+When the user asks to "analyze storage", "organize", or refers to "this folder", use: ${selectedFile}`
+    } else {
+      // Selected a file - extract parent directory
+      const pathParts = selectedFile.split(/[/\\]/)
+      pathParts.pop() // Remove filename
+      const parentFolder = pathParts.join(selectedFile.includes('/') ? '/' : '\\')
+      
+      selectedContext = `\n\nSELECTED FILE: ${selectedFile}
+When the user says "this file", they mean: ${selectedFile}
+If they ask to analyze storage or organize, use the parent folder: ${parentFolder || workingFolder}`
+    }
+  }
 
   return `You are Momentum, an AI-powered desktop file management assistant.
 
-WORKING FOLDER: ${workingFolder}${selectedFileContext}
+WORKING FOLDER: ${targetFolder}${selectedContext}
 
 CAPABILITIES:
 - List, read, create, move, rename, copy, and delete files/folders
@@ -67,61 +83,14 @@ TOOLS AVAILABLE:
 - categorize_images: Categorize images using AI Vision and organize into folders
 
 VISUALIZATION INSTRUCTIONS:
-When you use the analyze_storage tool, you MUST create an interactive React artifact to visualize the results beautifully.
+When you use the analyze_storage tool, the UI will automatically display beautiful charts in the Storage panel.
+You do NOT need to create artifacts or show code - the visualization happens automatically.
 
-The artifact should:
-1. Use type: "application/vnd.ant.react"
-2. Import Recharts: import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-3. Display the data with multiple visualizations:
-   - Bar chart showing storage by file type
-   - Pie chart showing percentage distribution
-   - Sortable table of largest files
-   - List of cleanup suggestions with action buttons
+Simply provide a brief summary like:
+"I've analyzed the storage in your folder. Check the Storage tab for detailed visualizations including charts and graphs."
 
-Example artifact structure for storage analysis:
-
-<antthinking>
-I should show a clear example of the artifact format so Gemini knows exactly what to create. This will guide it to make proper React components with Recharts.
-</antthinking>
-
-\`\`\`typescript
-import { useState } from 'react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-
-export default function StorageAnalysis() {
-  const data = {
-    totalSize: ...,
-    byType: [...],
-    largestFiles: [...]
-  }
-  
-  return (
-    <div className="p-6 bg-slate-900 text-white">
-      <h1>Storage Analysis</h1>
-      
-      {/* Charts */}
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data.byType}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="type" />
-          <YAxis />
-          <Tooltip />
-          <Bar dataKey="size" fill="#10b981" />
-        </BarChart>
-      </ResponsiveContainer>
-      
-      {/* Table and actions */}
-    </div>
-  )
-}
-\`\`\`
-
-IMPORTANT: 
-- ALWAYS create the artifact for storage analysis queries
-- Use the actual data returned from analyze_storage tool
-- Make charts interactive and beautiful
-- Use Tailwind classes for styling
-- Include action buttons for cleanup tasks
+DO NOT include any artifact tags, code blocks, or React code in your response.
+The charts will appear automatically in the Storage panel.
 
 RULES:
 1. ALWAYS use FULL ABSOLUTE PATHS starting with "${workingFolder}"
@@ -147,7 +116,8 @@ export async function chatStream(
   messages: ChatMessage[],
   grantedFolders: string[],
   mainWindow: BrowserWindow | null,
-  selectedFile?: string
+  selectedFile?: string,
+  isSelectedDirectory?: boolean
 ): Promise<AgentResponse> {
   const client = getClient()
 
@@ -156,6 +126,9 @@ export async function chatStream(
 
   console.log('[ORCHESTRATOR] Starting 2-layer processing')
   console.log('[ORCHESTRATOR] User message:', lastMessage.substring(0, 100))
+  if (selectedFile && isSelectedDirectory) {
+    console.log('[ORCHESTRATOR] Selected folder (will be used for storage/organize):', selectedFile)
+  }
 
   // ===== LAYER 1: ROUTER =====
   mainWindow?.webContents.send('agent:routing-start')
@@ -188,7 +161,7 @@ export async function chatStream(
 
   // ===== LAYER 2: EXECUTOR =====
   try {
-    const systemInstruction = buildSystemInstruction(workingFolder, selectedFile)
+    const systemInstruction = buildSystemInstruction(workingFolder, selectedFile, isSelectedDirectory)
 
     const model = client.getGenerativeModel({
       model: executorConfig.model,
@@ -297,6 +270,7 @@ export async function chatStream(
         grantedFolders,
         mainWindow,
         selectedFile,
+        isSelectedDirectory,
         'pro-high',
         classification
       )
@@ -318,6 +292,7 @@ async function chatStreamWithExecutor(
   grantedFolders: string[],
   mainWindow: BrowserWindow | null,
   selectedFile: string | undefined,
+  isSelectedDirectory: boolean | undefined,
   executorProfile: ExecutorProfile,
   classification?: TaskClassification
 ): Promise<AgentResponse> {
@@ -330,7 +305,7 @@ async function chatStreamWithExecutor(
   console.log(`[EXECUTOR:${executorProfile}] Direct call (escalation)`)
 
   try {
-    const systemInstruction = buildSystemInstruction(workingFolder, selectedFile)
+    const systemInstruction = buildSystemInstruction(workingFolder, selectedFile, isSelectedDirectory)
 
     const model = client.getGenerativeModel({
       model: executorConfig.model,
@@ -425,7 +400,9 @@ async function chatStreamWithExecutor(
 
 export async function chat(
   messages: ChatMessage[],
-  grantedFolders: string[]
+  grantedFolders: string[],
+  selectedFile?: string,
+  isSelectedDirectory?: boolean
 ): Promise<AgentResponse> {
-  return chatStream(messages, grantedFolders, null)
+  return chatStream(messages, grantedFolders, null, selectedFile, isSelectedDirectory)
 }

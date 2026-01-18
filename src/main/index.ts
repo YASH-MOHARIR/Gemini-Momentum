@@ -332,11 +332,10 @@ ipcMain.handle('agent:is-ready', () => {
 
 ipcMain.handle(
   'agent:chat',
-  async (_, messages: gemini.ChatMessage[], grantedFolders: string[], selectedFile?: string) => {
-    return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile)
+  async (_, messages: gemini.ChatMessage[], grantedFolders: string[], selectedFile?: string, isDirectory?: boolean) => {
+    return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile, isDirectory)
   }
 )
-
 ipcMain.handle('agent:test', async () => {
   return await gemini.testConnection()
 })
