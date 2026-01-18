@@ -24,6 +24,7 @@ import StoragePanel from './components/StoragePanel'
 import GoogleSignIn from './components/GoogleSignIn'
 import TaskTemplates from './components/TaskTemplates'
 import AgentWorkspace from './components/AgentWorkspace'
+import BeforeAfterView from './components/BeforeAfterView'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 import { useAgentStore } from './stores/agentStore'
 
@@ -183,8 +184,10 @@ function App(): JSX.Element {
 
   const {
     folders, selectedFile, messages, isProcessing, isAgentReady, storageAnalysis,
+    beforeAfterResult,
     addFolder, removeFolder, setSelectedFile, addMessage, setProcessing,
-    setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask, setStorageAnalysis
+    setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask, setStorageAnalysis,
+    hideBeforeAfter
   } = useAppStore()
 
   const handleModeChange = (mode: 'chat' | 'agent') => {
@@ -573,6 +576,14 @@ function App(): JSX.Element {
           </>
         )}
       </div>
+
+      {/* Before/After Visualization Modal */}
+      {beforeAfterResult && (
+        <BeforeAfterView 
+          result={beforeAfterResult} 
+          onClose={hideBeforeAfter} 
+        />
+      )}
     </div>
   )
 }

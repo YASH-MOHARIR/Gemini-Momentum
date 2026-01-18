@@ -89,6 +89,27 @@ export interface HighlightedFile {
   expiresAt: number
 }
 
+// ============ Before/After Visualization Types ============
+
+export interface FileNode {
+  name: string
+  path: string
+  isDirectory: boolean
+  size?: number
+  children?: FileNode[]
+}
+
+export interface OrganizationResult {
+  before: FileNode[]
+  after: FileNode[]
+  stats: {
+    filesMoved: number
+    foldersCreated: number
+    filesDeleted: number
+    totalFiles: number
+  }
+}
+
 interface AppState {
   // Folders
   folders: GrantedFolder[]
@@ -110,6 +131,9 @@ interface AppState {
   
   // File Highlighting
   highlightedFiles: HighlightedFile[]
+  
+  // Before/After Visualization
+  beforeAfterResult: OrganizationResult | null
   
   // Actions - Folders
   addFolder: (folder: GrantedFolder) => void
@@ -140,6 +164,10 @@ interface AppState {
   highlightFiles: (paths: string[], type: HighlightType, duration?: number) => void
   clearHighlights: () => void
   getHighlightType: (path: string) => HighlightType | null
+  
+  // Actions - Before/After
+  showBeforeAfter: (result: OrganizationResult) => void
+  hideBeforeAfter: () => void
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11)
@@ -155,6 +183,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isAgentReady: false,
   storageAnalysis: null,
   highlightedFiles: [],
+  beforeAfterResult: null,
 
   // Folder actions
   addFolder: (folder) => {
@@ -320,5 +349,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const now = Date.now()
     const highlight = highlightedFiles.find(h => h.path === path && h.expiresAt > now)
     return highlight?.type || null
-  }
+  },
+  
+  // Before/After actions
+  showBeforeAfter: (result) => set({ beforeAfterResult: result }),
+  hideBeforeAfter: () => set({ beforeAfterResult: null })
 }))
