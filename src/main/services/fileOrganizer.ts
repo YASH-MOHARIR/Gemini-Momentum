@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises'
-import * as path from 'path'
-import * as fileSystem from './fileSystem'
+import * as path from 'path' 
 import * as pendingActions from './pendingActions'
 
 // File category definitions

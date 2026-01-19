@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -34,7 +35,12 @@ export interface StorageAnalysis {
 
 // ============ Constants ============
 
-const FILE_CATEGORIES = {
+interface CategoryConfig {
+  extensions: string[]
+  color: string
+}
+
+const FILE_CATEGORIES: Record<string, CategoryConfig> = {
   'Videos': { extensions: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v'], color: '#ef4444' },
   'Images': { extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'bmp', 'ico'], color: '#8b5cf6' },
   'Archives': { extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'], color: '#f59e0b' },
@@ -162,7 +168,7 @@ export async function analyzeStorage(
       size: stats.size,
       count: stats.count,
       percentage: (stats.size / totalSize) * 100,
-      color: FILE_CATEGORIES[type as keyof typeof FILE_CATEGORIES]?.color || '#6b7280'
+      color: FILE_CATEGORIES[type]?.color || '#6b7280'
     }))
     .sort((a, b) => b.size - a.size)
 

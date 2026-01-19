@@ -31,7 +31,7 @@ export async function createSpreadsheet(
 ): Promise<{ success: boolean; path?: string; error?: string }> {
   try {
     const { columns, rows, sheetName = 'Sheet1' } = data
-    const { title, includeFormulas = true, autoFilter = true, freezeHeader = true } = options
+    const { includeFormulas = true, autoFilter = true, freezeHeader = true } = options
 
     // Create workbook and worksheet
     const workbook = XLSX.utils.book_new()

@@ -201,13 +201,13 @@ export async function processReceiptsBatch(
     const summaryLines = [
       `**Expense Report Created**`,
       ``,
-      `• Receipts processed: ${receipts.length}`,
-      `• Total amount: ${totalAmount.toFixed(2)}`,
+      `â€¢ Receipts processed: ${receipts.length}`,
+      `â€¢ Total amount: ${totalAmount.toFixed(2)}`,
       ``,
       `**By Category:**`
     ]
     for (const [cat, amount] of Object.entries(categoryTotals)) {
-      summaryLines.push(`• ${cat}: ${amount.toFixed(2)}`)
+      summaryLines.push(`â€¢ ${cat}: ${amount.toFixed(2)}`)
     }
     summaryLines.push(``, `Report saved to: ${outputPath}`)
 
@@ -270,7 +270,7 @@ Return ONLY the filename, no extension, no explanation.`
   return suggestedName
 }
 
-async function generateDocumentName(filePath: string, style?: string): Promise<string> {
+async function generateDocumentName(filePath: string, _style?: string): Promise<string> {
   try {
     // Read file content
     const content = await fileSystem.readFile(filePath)
@@ -532,7 +532,7 @@ export async function categorizeImages(
     if (nonEmptyCategories.length > 0) {
       summaryLines.push(`**By Category:**`)
       for (const [category, images] of nonEmptyCategories) {
-        summaryLines.push(`• ${category}: ${images.length} images`)
+        summaryLines.push(`â€¢ ${category}: ${images.length} images`)
       }
     }
 
@@ -577,9 +577,9 @@ export async function categorizeImages(
         }
       }
 
-      summaryLines.push(`• Files moved: ${moved}`)
+      summaryLines.push(`â€¢ Files moved: ${moved}`)
     } else {
-      summaryLines.push(``, `⚠️ This is a preview. Run with execute=true to move files.`)
+      summaryLines.push(``, `âš ï¸ This is a preview. Run with execute=true to move files.`)
     }
 
     return {

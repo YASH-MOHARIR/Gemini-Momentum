@@ -15,7 +15,7 @@ export interface AgentRule {
 }
 
 export interface AgentConfig {
-  id: string  // NEW: Unique watcher ID
+  id: string
   watchFolder: string
   rules: AgentRule[]
   enableActivityLog: boolean
@@ -24,7 +24,7 @@ export interface AgentConfig {
 
 export interface ActivityEntry {
   id: string
-  watcherId: string  // NEW: Track which watcher processed this
+  watcherId: string
   timestamp: string
   originalName: string
   originalPath: string
@@ -45,7 +45,7 @@ export interface WatcherStats {
 }
 
 interface WatcherInstance {
-  watcher: chokidar.FSWatcher
+  watcher: ReturnType<typeof chokidar.watch>
   config: AgentConfig
   isPaused: boolean
   stats: WatcherStats
@@ -64,13 +64,11 @@ export function startWatcher(
   agentConfig: AgentConfig,
   mainWindow: BrowserWindow
 ): { success: boolean; error?: string; watcherId?: string } {
-  // Check max watchers limit
   if (watchers.size >= MAX_WATCHERS) {
     return { success: false, error: `Maximum ${MAX_WATCHERS} watchers allowed` }
   }
 
-  // Check if folder already being watched
-  for (const [id, instance] of watchers.entries()) {
+  for (const [_id, instance] of watchers.entries()) {
     if (instance.config.watchFolder === agentConfig.watchFolder) {
       return { success: false, error: 'This folder is already being watched' }
     }
@@ -80,25 +78,28 @@ export function startWatcher(
   const watcherId = agentConfig.id
 
   console.log(`[WATCHER ${watcherId}] Starting watcher on: ${agentConfig.watchFolder}`)
-  console.log(`[WATCHER ${watcherId}] Rules:`, agentConfig.rules.map(r => r.text))
+  console.log(
+    `[WATCHER ${watcherId}] Rules:`,
+    agentConfig.rules.map((r) => r.text)
+  )
 
   try {
     const watcher = chokidar.watch(agentConfig.watchFolder, {
       ignored: [
-        /(^|[\/\\])\../, // Ignore hidden files (dotfiles)
-        /momentum_activity_log\.xlsx$/, // Ignore our own log file
-        /~\$.*/, // Ignore Office temp files
-        /\.tmp$/i, // Ignore .tmp files
-        /\.crdownload$/i, // Ignore Chrome partial downloads
-        /\.part$/i // Ignore Firefox partial downloads
+        /(^|[\/\\])\../,
+        /momentum_activity_log\.xlsx$/,
+        /~\$.*/,
+        /\.tmp$/i,
+        /\.crdownload$/i,
+        /\.part$/i
       ],
       persistent: true,
-      ignoreInitial: true, // Don't process existing files
+      ignoreInitial: true,
       awaitWriteFinish: {
-        stabilityThreshold: 2000, // Wait 2s for file to finish writing
+        stabilityThreshold: 2000,
         pollInterval: 100
       },
-      depth: 0 // Only watch top level of folder
+      depth: 0
     })
 
     const stats: WatcherStats = {
@@ -108,7 +109,6 @@ export function startWatcher(
       errors: 0
     }
 
-    // Store watcher instance
     watchers.set(watcherId, {
       watcher,
       config: agentConfig,
@@ -116,7 +116,6 @@ export function startWatcher(
       stats
     })
 
-    // File added event
     watcher.on('add', async (filePath) => {
       const instance = watchers.get(watcherId)
       if (!instance || instance.isPaused) {
@@ -126,13 +125,11 @@ export function startWatcher(
       await handleNewFile(watcherId, filePath)
     })
 
-    // Error event
     watcher.on('error', (error) => {
       console.error(`[WATCHER ${watcherId}] Error:`, error)
       mainWindowRef?.webContents.send('watcher:error', watcherId, String(error))
     })
 
-    // Ready event
     watcher.on('ready', () => {
       console.log(`[WATCHER ${watcherId}] Ready and watching`)
       mainWindowRef?.webContents.send('watcher:ready', watcherId)
@@ -205,16 +202,15 @@ export function getWatcherStatus(watcherId?: string): {
     return { running: false, paused: false }
   }
 
-  // Legacy: Return status of any running watcher
   const anyRunning = watchers.size > 0
   return {
     running: anyRunning,
-    paused: false // Can't determine single pause state
+    paused: false
   }
 }
 
 export function getAllWatchers(): AgentConfig[] {
-  return Array.from(watchers.values()).map(instance => instance.config)
+  return Array.from(watchers.values()).map((instance) => instance.config)
 }
 
 export function getWatcherStats(watcherId: string): WatcherStats | null {
@@ -226,7 +222,10 @@ export function updateRules(watcherId: string, newRules: AgentRule[]): { success
   const instance = watchers.get(watcherId)
   if (instance) {
     instance.config.rules = newRules
-    console.log(`[WATCHER ${watcherId}] Rules updated:`, newRules.map(r => r.text))
+    console.log(
+      `[WATCHER ${watcherId}] Rules updated:`,
+      newRules.map((r) => r.text)
+    )
     return { success: true }
   }
   return { success: false }
@@ -241,14 +240,12 @@ async function handleNewFile(watcherId: string, filePath: string): Promise<void>
   const fileName = path.basename(filePath)
   console.log(`[WATCHER ${watcherId}] New file detected: ${fileName}`)
 
-  // Notify UI that processing started
   mainWindowRef?.webContents.send('watcher:file-detected', watcherId, {
     path: filePath,
     name: fileName
   })
 
   try {
-    // Check file still exists (might have been moved/deleted quickly)
     try {
       await fs.access(filePath)
     } catch {
@@ -256,31 +253,25 @@ async function handleNewFile(watcherId: string, filePath: string): Promise<void>
       return
     }
 
-    // Process file with AI rules
     const result = await processFileWithRules(filePath, instance.config.rules)
     console.log(`[WATCHER ${watcherId}] Rule processing result:`, result)
 
-    // Track AI usage
     if (result.usedVision) {
       instance.stats.aiCalls++
     }
 
-    // Execute action based on result
     if (result.action === 'move' && result.destination) {
       const entry = await executeMove(watcherId, filePath, result)
       instance.stats.filesProcessed++
 
-      // Log to Excel if enabled
       if (instance.config.enableActivityLog) {
         await logActivity(instance.config.logPath, entry)
       }
 
-      // Notify UI
       mainWindowRef?.webContents.send('watcher:file-processed', watcherId, entry)
     } else {
-      // File skipped - no matching rule or skip action
       instance.stats.filesProcessed++
-      
+
       const entry: ActivityEntry = {
         id: Date.now().toString(),
         watcherId,
@@ -302,7 +293,7 @@ async function handleNewFile(watcherId: string, filePath: string): Promise<void>
   } catch (error) {
     console.error(`[WATCHER ${watcherId}] Error processing ${fileName}:`, error)
     instance.stats.errors++
-    
+
     const entry: ActivityEntry = {
       id: Date.now().toString(),
       watcherId,
@@ -336,19 +327,15 @@ async function executeMove(
 
   console.log(`[WATCHER ${watcherId}] Moving: ${filePath} → ${destPath}`)
 
-  // Create destination folder if needed
   await fs.mkdir(destFolder, { recursive: true })
 
-  // Handle filename collision
   const finalDestPath = await getUniqueDestPath(destPath)
   const finalFileName = path.basename(finalDestPath)
 
-  // Move the file
   await fs.rename(filePath, finalDestPath)
 
   console.log(`[WATCHER ${watcherId}] Moved successfully to: ${finalDestPath}`)
 
-  // Notify file system changed (for UI refresh)
   mainWindowRef?.webContents.send('fs:changed')
 
   return {
@@ -376,11 +363,9 @@ async function getUniqueDestPath(destPath: string): Promise<string> {
   while (true) {
     try {
       await fs.access(finalPath)
-      // File exists, try next number
       finalPath = path.join(dir, `${baseName} (${counter})${ext}`)
       counter++
     } catch {
-      // File doesn't exist, use this path
       break
     }
   }

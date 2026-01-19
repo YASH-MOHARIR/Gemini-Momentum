@@ -25,6 +25,7 @@ import GoogleSignIn from './components/GoogleSignIn'
 import TaskTemplates from './components/TaskTemplates'
 import AgentWorkspace from './components/AgentWorkspace'
 import BeforeAfterView from './components/BeforeAfterView'
+import SetupScreen from './components/SetupScreen'
 import { useAppStore, FileEntry, Message } from './stores/appStore'
 import { useAgentStore } from './stores/agentStore'
 
@@ -134,7 +135,7 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
   )
 }
 
-function ModeTabs({ isAgentMode, onModeChange, agentStatus }: { 
+function ModeTabs({ isAgentMode, onModeChange, agentStatus }: {
   isAgentMode: boolean
   onModeChange: (mode: 'chat' | 'agent') => void
   agentStatus: string
@@ -177,6 +178,8 @@ function App(): JSX.Element {
   const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(null)
   const [isGoogleConnected, setIsGoogleConnected] = useState(false)
   const [showTemplates, setShowTemplates] = useState(true)
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true)
+  const [needsSetup, setNeedsSetup] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { mode: agentMode, status: agentStatus, setMode, folderSelectMode, completeFolderSelect, cancelFolderSelect } = useAgentStore()
@@ -190,11 +193,33 @@ function App(): JSX.Element {
     hideBeforeAfter
   } = useAppStore()
 
+  // Check if setup is needed on mount
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const { hasGeminiKey } = await window.api.config.getApiKeys()
+        setNeedsSetup(!hasGeminiKey)
+      } catch (err) {
+        console.error('Failed to check API keys:', err)
+        setNeedsSetup(true)
+      } finally {
+        setIsCheckingSetup(false)
+      }
+    }
+    checkSetup()
+  }, [])
+
+  const handleSetupComplete = async () => {
+    setNeedsSetup(false)
+    // Refresh agent ready status
+    const ready = await window.api.agent.isReady()
+    setAgentReady(ready)
+  }
+
   const handleModeChange = (mode: 'chat' | 'agent') => {
     setMode(mode)
   }
 
-  // Handle folder click for agent mode selection
   const handleFolderClickForAgent = (folderPath: string) => {
     if (folderSelectMode !== 'none') {
       completeFolderSelect(folderPath)
@@ -274,10 +299,9 @@ function App(): JSX.Element {
       if (stepId) {
         const success = !(data.result as { error?: string })?.error
         updateTaskStep(stepId, { status: success ? 'completed' : 'error', result: data.result })
-        
-        // Check if this is storage analysis
+
         if (data.name === 'analyze_storage' && success) {
-          const result = data.result as { success: boolean; data?: any }
+          const result = data.result as { success: boolean; data?: unknown }
           if (result.data) {
             console.log('[APP] Storage analysis data received, switching to Storage tab')
             setStorageAnalysis(result.data)
@@ -356,6 +380,23 @@ function App(): JSX.Element {
 
   const handleTemplateSelect = (command: string) => handleSendMessage(command)
 
+  // Show loading while checking setup
+  if (isCheckingSetup) {
+    return (
+      <div className="h-screen bg-slate-900 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-slate-400">
+          <span className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+          <span>Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Show setup screen if no API key
+  if (needsSetup) {
+    return <SetupScreen onComplete={handleSetupComplete} />
+  }
+
   const hasAnyFolder = folders.length > 0
   const isSelectingFolder = folderSelectMode !== 'none'
   const hasStorageData = storageAnalysis !== null
@@ -414,10 +455,10 @@ function App(): JSX.Element {
             )}
             {folders.map((folder) => (
               <div key={folder.path} className="border-b border-slate-700/50">
-                <div 
+                <div
                   className={`flex items-center gap-2 px-3 py-2 group cursor-pointer transition-colors ${
-                    isSelectingFolder 
-                      ? 'bg-emerald-900/30 hover:bg-emerald-800/40' 
+                    isSelectingFolder
+                      ? 'bg-emerald-900/30 hover:bg-emerald-800/40'
                       : 'bg-slate-750 hover:bg-slate-700/30'
                   }`}
                   onClick={() => isSelectingFolder ? handleFolderClickForAgent(folder.path) : null}
@@ -430,9 +471,9 @@ function App(): JSX.Element {
                     </button>
                   )}
                 </div>
-                <FileTree 
-                  entries={folder.entries} 
-                  onFileSelect={handleFileSelect} 
+                <FileTree
+                  entries={folder.entries}
+                  onFileSelect={handleFileSelect}
                   selectedPath={selectedFile?.path}
                   onFolderClick={isSelectingFolder ? handleFolderClickForAgent : undefined}
                   highlightFolders={isSelectingFolder}
@@ -461,10 +502,8 @@ function App(): JSX.Element {
 
         {/* Main Content Area */}
         {isAgentMode ? (
-          /* Agent Mode: Full-Width Workspace */
           <AgentWorkspace />
         ) : (
-          /* Chat Mode: Chat + Right Panel */
           <>
             <main className="flex-1 flex flex-col bg-slate-900">
               <div className="flex-1 overflow-y-auto p-4">
@@ -579,9 +618,9 @@ function App(): JSX.Element {
 
       {/* Before/After Visualization Modal */}
       {beforeAfterResult && (
-        <BeforeAfterView 
-          result={beforeAfterResult} 
-          onClose={hideBeforeAfter} 
+        <BeforeAfterView
+          result={beforeAfterResult}
+          onClose={hideBeforeAfter}
         />
       )}
     </div>

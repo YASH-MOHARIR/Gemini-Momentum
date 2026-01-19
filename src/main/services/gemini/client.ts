@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const MODELS = {
   FLASH: 'gemini-2.5-flash',
-  PRO: 'gemini-2.5-flash'
+  PRO: 'gemini-2.5-pro'
 } as const
 
 export type ExecutorProfile = 'flash-minimal' | 'flash-high' | 'pro-high'
@@ -33,9 +33,10 @@ export const EXECUTOR_CONFIGS: Record<ExecutorProfile, ExecutorConfig> = {
   }
 }
 
-export const PRICING = {
-  [MODELS.FLASH]: { input: 0.5, output: 3.0 },
-  [MODELS.PRO]: { input: 2.0, output: 12.0 }
+// Pricing per 1M tokens
+export const PRICING: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-flash': { input: 0.5, output: 3.0 },
+  'gemini-2.5-pro': { input: 2.0, output: 12.0 }
 }
 
 // ============ CLIENT ============

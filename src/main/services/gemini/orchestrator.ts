@@ -28,10 +28,14 @@ export interface AgentResponse {
 
 // ============ SYSTEM INSTRUCTION BUILDER ============
 
-function buildSystemInstruction(workingFolder: string, selectedFile?: string, isDirectory?: boolean): string {
+function buildSystemInstruction(
+  workingFolder: string,
+  selectedFile?: string,
+  isDirectory?: boolean
+): string {
   let selectedContext = ''
   let targetFolder = workingFolder
-  
+
   if (selectedFile) {
     if (isDirectory) {
       // Selected a folder - use it as the target
@@ -43,7 +47,7 @@ When the user asks to "analyze storage", "organize", or refers to "this folder",
       const pathParts = selectedFile.split(/[/\\]/)
       pathParts.pop() // Remove filename
       const parentFolder = pathParts.join(selectedFile.includes('/') ? '/' : '\\')
-      
+
       selectedContext = `\n\nSELECTED FILE: ${selectedFile}
 When the user says "this file", they mean: ${selectedFile}
 If they ask to analyze storage or organize, use the parent folder: ${parentFolder || workingFolder}`
@@ -102,7 +106,7 @@ RULES:
 
 RESPONSE FORMATTING:
 - Use clear paragraphs with blank lines between them
-- Use bullet points (•) for lists
+- Use bullet points (â€¢) for lists
 - Use **bold** for emphasis on important items
 - Use headings when presenting structured information
 - Keep responses well-organized and easy to read
@@ -161,12 +165,17 @@ export async function chatStream(
 
   // ===== LAYER 2: EXECUTOR =====
   try {
-    const systemInstruction = buildSystemInstruction(workingFolder, selectedFile, isSelectedDirectory)
+    const systemInstruction = buildSystemInstruction(
+      workingFolder,
+      selectedFile,
+      isSelectedDirectory
+    )
 
     const model = client.getGenerativeModel({
       model: executorConfig.model,
       systemInstruction,
-      tools: [{ functionDeclarations: allTools }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ functionDeclarations: allTools as any }],
       generationConfig: {
         temperature: 1.0
       }
@@ -247,9 +256,7 @@ export async function chatStream(
     updateMetrics(executorProfile, inputTokens, outputTokens)
     incrementTasksCompleted()
 
-    console.log(
-      `[ORCHESTRATOR] Complete. Executor: ${executorProfile}, Tools: ${toolCalls.length}`
-    )
+    console.log(`[ORCHESTRATOR] Complete. Executor: ${executorProfile}, Tools: ${toolCalls.length}`)
 
     return {
       message: fullText || 'Done.',
@@ -305,12 +312,17 @@ async function chatStreamWithExecutor(
   console.log(`[EXECUTOR:${executorProfile}] Direct call (escalation)`)
 
   try {
-    const systemInstruction = buildSystemInstruction(workingFolder, selectedFile, isSelectedDirectory)
+    const systemInstruction = buildSystemInstruction(
+      workingFolder,
+      selectedFile,
+      isSelectedDirectory
+    )
 
     const model = client.getGenerativeModel({
       model: executorConfig.model,
       systemInstruction,
-      tools: [{ functionDeclarations: allTools }]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ functionDeclarations: allTools as any }]
     })
 
     const history = messages.slice(0, -1).map((m) => ({

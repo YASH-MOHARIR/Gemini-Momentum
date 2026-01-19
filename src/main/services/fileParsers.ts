@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -5,7 +6,8 @@ import * as path from 'path'
 async function parsePDF(filePath: string): Promise<string> {
   try {
     // Dynamic import to avoid issues with native modules
-    const pdfParse = (await import('pdf-parse')).default
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse')
     const buffer = await fs.readFile(filePath)
     const data = await pdfParse(buffer)
     return data.text
@@ -51,7 +53,8 @@ async function parseExcel(filePath: string): Promise<string> {
 // CSV parsing
 async function parseCSV(filePath: string): Promise<string> {
   try {
-    const Papa = (await import('papaparse')).default
+    const PapaModule = await import('papaparse')
+    const Papa = PapaModule.default || PapaModule
     const content = await fs.readFile(filePath, 'utf-8')
     const result = Papa.parse(content, { header: true })
     

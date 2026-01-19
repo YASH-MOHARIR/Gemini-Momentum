@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import Store from 'electron-store'
 import icon from '../../resources/icon.png?asset'
 import * as fileSystem from './services/fileSystem'
 import * as gemini from './services/gemini'
@@ -13,6 +14,18 @@ import { initRuleProcessor } from './services/ruleProcessor'
 import { config } from 'dotenv'
 
 config()
+
+// ============ Persistent Config Store ============
+const store = new Store({
+  name: 'momentum-config',
+  encryptionKey: 'momentum-secure-key-2026'
+})
+
+interface ApiKeys {
+  geminiKey: string
+  googleClientId?: string
+  googleClientSecret?: string
+}
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -41,17 +54,15 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
-  // Handle close button - check for ANY running watchers
   mainWindow.on('close', async (event) => {
-    if (isQuitting) return // Already quitting, let it close
+    if (isQuitting) return
 
     const allWatchers = fileWatcher.getAllWatchers()
     const hasRunning = allWatchers.length > 0
-    
-    // If any agents are running, ask user what to do
+
     if (hasRunning) {
       event.preventDefault()
-      
+
       const { response } = await dialog.showMessageBox(mainWindow!, {
         type: 'question',
         buttons: ['Minimize to Tray', 'Stop All & Quit', 'Cancel'],
@@ -63,7 +74,6 @@ function createWindow(): void {
       })
 
       if (response === 0) {
-        // Minimize to tray
         mainWindow?.hide()
         if (tray && process.platform === 'win32') {
           tray.displayBalloon({
@@ -73,57 +83,17 @@ function createWindow(): void {
           })
         }
       } else if (response === 1) {
-        // Stop all agents and quit
         isQuitting = true
         fileWatcher.stopAllWatchers()
         mainWindow?.destroy()
       }
-      // response === 2 (Cancel) - do nothing
     } else {
-      // No agents running - quit normally
       isQuitting = true
       mainWindow?.destroy()
     }
   })
 
-  // Handle minimize button - ask before minimizing to tray if agents running
-  mainWindow.on('minimize', async (event) => {
-    const allWatchers = fileWatcher.getAllWatchers()
-    const hasRunning = allWatchers.length > 0
-    
-    if (hasRunning) {
-      event.preventDefault()
-      
-      const { response } = await dialog.showMessageBox(mainWindow!, {
-        type: 'info',
-        buttons: ['Minimize to Tray', 'Minimize Normally', 'Cancel'],
-        defaultId: 0,
-        cancelId: 2,
-        title: 'Agents Running',
-        message: `You have ${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running`,
-        detail: 'Minimize to tray to keep agents working in the background, or minimize normally to taskbar.'
-      })
 
-      if (response === 0) {
-        // Minimize to tray
-        mainWindow?.hide()
-        if (tray && process.platform === 'win32') {
-          tray.displayBalloon({
-            iconType: 'info',
-            title: 'Momentum',
-            content: `${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running in background.`
-          })
-        }
-      } else if (response === 1) {
-        // Minimize normally (let it minimize to taskbar)
-        // Don't preventDefault, let default minimize behavior happen
-        // Re-trigger the minimize since we already prevented it
-        mainWindow?.minimize()
-      }
-      // response === 2 (Cancel) - do nothing
-    }
-    // If no agents running, normal minimize behavior (let default happen)
-  })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -140,16 +110,14 @@ function createWindow(): void {
 // ============ System Tray ============
 
 function createTray(): void {
-  // Create tray icon
   const trayIcon = nativeImage.createFromPath(icon)
   const resizedIcon = trayIcon.resize({ width: 16, height: 16 })
-  
+
   tray = new Tray(resizedIcon)
   tray.setToolTip('Momentum - AI File Agent')
-  
+
   updateTrayMenu()
 
-  // Click to show window (Windows/Linux)
   tray.on('click', () => {
     if (mainWindow?.isVisible()) {
       mainWindow.focus()
@@ -158,7 +126,6 @@ function createTray(): void {
     }
   })
 
-  // Double-click to show window (Windows)
   tray.on('double-click', () => {
     mainWindow?.show()
   })
@@ -169,8 +136,7 @@ function updateTrayMenu(): void {
 
   const allWatchers = fileWatcher.getAllWatchers()
   const hasRunning = allWatchers.length > 0
-  
-  // Count running vs paused
+
   let runningCount = 0
   let pausedCount = 0
   for (const config of allWatchers) {
@@ -187,10 +153,7 @@ function updateTrayMenu(): void {
   }
 
   const contextMenu = Menu.buildFromTemplate([
-    {
-      label: statusText,
-      enabled: false
-    },
+    { label: statusText, enabled: false },
     { type: 'separator' },
     {
       label: 'Show Window',
@@ -221,22 +184,59 @@ function updateTrayMenu(): void {
   ])
 
   tray.setContextMenu(contextMenu)
-  
-  // Update tooltip
   tray.setToolTip(`Momentum - ${statusText}`)
 }
 
-// Update tray when watcher status changes
 function setupWatcherStatusUpdates(): void {
-  // Poll watcher status every 2 seconds to update tray
   setInterval(() => {
     updateTrayMenu()
   }, 2000)
 }
 
+// ============ Config / API Keys Handlers ============
+
+ipcMain.handle('config:get-api-keys', () => {
+  return {
+    hasGeminiKey: !!(process.env.GEMINI_API_KEY || store.get('geminiKey')),
+    hasGoogleCredentials: !!((process.env.GOOGLE_CLIENT_ID || store.get('googleClientId')) && 
+                            (process.env.GOOGLE_CLIENT_SECRET || store.get('googleClientSecret')))
+  }
+})
+
+ipcMain.handle('config:save-api-keys', async (_, keys: ApiKeys) => {
+  try {
+    // Save Gemini key
+    store.set('geminiKey', keys.geminiKey)
+
+    // Initialize Gemini with new key
+    gemini.initializeGemini(keys.geminiKey)
+    initRuleProcessor(keys.geminiKey)
+
+    // Save Google credentials if provided
+    if (keys.googleClientId && keys.googleClientSecret) {
+      store.set('googleClientId', keys.googleClientId)
+      store.set('googleClientSecret', keys.googleClientSecret)
+      googleAuth.initializeGoogleAuth(keys.googleClientId, keys.googleClientSecret)
+    }
+
+    console.log('[MAIN] API keys saved and services initialized')
+    return { success: true }
+  } catch (error) {
+    console.error('[MAIN] Failed to save API keys:', error)
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('config:clear-api-keys', () => {
+  store.delete('geminiKey')
+  store.delete('googleClientId')
+  store.delete('googleClientSecret')
+  console.log('[MAIN] API keys cleared')
+  return { success: true }
+})
+
 // ============ IPC Handlers ============
 
-// App handlers
 ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openDirectory']
@@ -336,11 +336,11 @@ ipcMain.handle(
     return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile, isDirectory)
   }
 )
+
 ipcMain.handle('agent:test', async () => {
   return await gemini.testConnection()
 })
 
-// Metrics handlers
 ipcMain.handle('agent:get-metrics', () => {
   return gemini.getMetrics()
 })
@@ -419,7 +419,6 @@ ipcMain.handle('google:sign-out', async () => {
   return { success: true }
 })
 
-// Google Sheets handlers
 ipcMain.handle('google:create-sheet', async (_, data: {
   title: string
   headers: string[]
@@ -434,7 +433,6 @@ ipcMain.handle('google:create-sheet', async (_, data: {
   })
 })
 
-// Gmail handlers
 ipcMain.handle('google:search-gmail', async (_, query: string, maxResults?: number) => {
   return await gmail.searchEmails(query, maxResults || 20)
 })
@@ -446,13 +444,13 @@ ipcMain.handle('watcher:start', async (_, config: fileWatcher.AgentConfig) => {
     return { success: false, error: 'Main window not available' }
   }
   const result = fileWatcher.startWatcher(config, mainWindow)
-  updateTrayMenu() // Update tray when watcher starts
+  updateTrayMenu()
   return result
 })
 
 ipcMain.handle('watcher:stop', (_, watcherId: string) => {
   const result = fileWatcher.stopWatcher(watcherId)
-  updateTrayMenu() // Update tray when watcher stops
+  updateTrayMenu()
   return result
 })
 
@@ -464,13 +462,13 @@ ipcMain.handle('watcher:stop-all', () => {
 
 ipcMain.handle('watcher:pause', (_, watcherId: string) => {
   const result = fileWatcher.pauseWatcher(watcherId)
-  updateTrayMenu() // Update tray when watcher pauses
+  updateTrayMenu()
   return result
 })
 
 ipcMain.handle('watcher:resume', (_, watcherId: string) => {
   const result = fileWatcher.resumeWatcher(watcherId)
-  updateTrayMenu() // Update tray when watcher resumes
+  updateTrayMenu()
   return result
 })
 
@@ -495,19 +493,19 @@ ipcMain.handle('watcher:update-rules', (_, watcherId: string, rules: fileWatcher
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.momentum.app')
 
-  // Initialize Gemini
-  const apiKey = process.env.GEMINI_API_KEY
+  // Initialize Gemini - check env first, then store
+  const apiKey = process.env.GEMINI_API_KEY || (store.get('geminiKey') as string)
   if (apiKey) {
     gemini.initializeGemini(apiKey)
     initRuleProcessor(apiKey)
-    console.log('[MAIN] Gemini initialized from environment')
+    console.log('[MAIN] Gemini initialized')
   } else {
-    console.warn('[MAIN] No GEMINI_API_KEY found in environment')
+    console.warn('[MAIN] No GEMINI_API_KEY found - waiting for user setup')
   }
 
-  // Initialize Google Auth
-  const googleClientId = process.env.GOOGLE_CLIENT_ID
-  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET
+  // Initialize Google Auth - check env first, then store
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || (store.get('googleClientId') as string)
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || (store.get('googleClientSecret') as string)
 
   if (googleClientId && googleClientSecret) {
     googleAuth.initializeGoogleAuth(googleClientId, googleClientSecret)
@@ -540,18 +538,13 @@ app.whenReady().then(() => {
   })
 })
 
-// macOS: Keep running when window closed if any agents are active
 app.on('window-all-closed', () => {
   const allWatchers = fileWatcher.getAllWatchers()
-  
-  // Only keep running if agents are active
   if (allWatchers.length === 0) {
     app.quit()
   }
-  // If agents are running, keep app alive (tray icon handles control)
 })
 
-// Cleanup before quit
 app.on('before-quit', () => {
   isQuitting = true
   fileWatcher.stopAllWatchers()
