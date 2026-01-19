@@ -14,6 +14,7 @@ Momentum gives you an AI coworker that watches your folders, organizes files, ex
 ### Prerequisites
 - Node.js 18+
 - Gemini API key ([Get one free](https://aistudio.google.com/apikey))
+- Google Cloud Console project (for Gmail/Sheets features)
 
 ### Installation
 
@@ -25,9 +26,9 @@ cd momentum
 # Install dependencies
 npm install
 
-# Configure API key
+# Configure environment
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Edit .env and add your API keys (see below)
 
 # Run development
 npm run dev
@@ -38,8 +39,28 @@ npm run dev
 Create a `.env` file in the root directory:
 
 ```env
+# Required - Gemini API
 GEMINI_API_KEY=your-gemini-api-key-here
+
+# Optional - Google Integration (Gmail + Sheets)
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
+
+### Google Cloud Setup (Optional)
+
+Required only if you want Gmail and Google Sheets features:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or select existing)
+3. Enable these APIs:
+   - Gmail API
+   - Google Sheets API
+   - Google Drive API
+4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
+5. Select **Desktop App** as application type
+6. Download credentials and copy `Client ID` and `Client Secret` to your `.env`
+7. Configure OAuth consent screen (can be in "Testing" mode for personal use)
 
 ### Build for Production
 
