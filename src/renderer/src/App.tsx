@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactElement } from 'react'
 import {
   Zap,
   Send,
@@ -26,7 +26,7 @@ import TaskTemplates from './components/TaskTemplates'
 import AgentWorkspace from './components/AgentWorkspace'
 import BeforeAfterView from './components/BeforeAfterView'
 import SetupScreen from './components/SetupScreen'
-import { useAppStore, FileEntry, Message } from './stores/appStore'
+import { useAppStore, FileEntry, Message, StorageAnalysisData } from './stores/appStore'
 import { useAgentStore } from './stores/agentStore'
 
 interface TaskClassification {
@@ -60,9 +60,9 @@ function RoutingIndicator({ classification }: { classification: TaskClassificati
   )
 }
 
-function formatMessage(content: string): JSX.Element[] {
+function formatMessage(content: string): ReactElement[] {
   const lines = content.split('\n')
-  const elements: JSX.Element[] = []
+  const elements: ReactElement[] = []
   lines.forEach((line, index) => {
     let formattedLine: React.ReactNode = line
     if (line.includes('**')) {
@@ -167,7 +167,7 @@ function ModeTabs({ isAgentMode, onModeChange, agentStatus }: {
   )
 }
 
-function App(): JSX.Element {
+function App(): ReactElement {
   const [sidebarWidth] = useState(280)
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -182,7 +182,7 @@ function App(): JSX.Element {
   const [needsSetup, setNeedsSetup] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { mode: agentMode, status: agentStatus, setMode, folderSelectMode, completeFolderSelect, cancelFolderSelect } = useAgentStore()
+  const { mode: agentMode, status: agentStatus, setMode, folderSelectMode, completeFolderSelect } = useAgentStore()
   const isAgentMode = agentMode === 'agent'
 
   const {
@@ -211,7 +211,6 @@ function App(): JSX.Element {
 
   const handleSetupComplete = async () => {
     setNeedsSetup(false)
-    // Refresh agent ready status
     const ready = await window.api.agent.isReady()
     setAgentReady(ready)
   }
@@ -232,7 +231,7 @@ function App(): JSX.Element {
       setAgentReady(ready)
     }
     checkAgent()
-  }, [])
+  }, [setAgentReady])
 
   useEffect(() => {
     const checkGoogle = async () => {
@@ -268,7 +267,7 @@ function App(): JSX.Element {
   }, [activeTab, isAgentMode])
 
   useEffect(() => {
-    const unsubNewAction = window.api.pending.onNewAction((action) => {
+    const unsubNewAction = window.api.pending.onNewAction(() => {
       setPendingCount((prev) => prev + 1)
       if (!isAgentMode) setActiveTab('review')
     })
@@ -301,7 +300,7 @@ function App(): JSX.Element {
         updateTaskStep(stepId, { status: success ? 'completed' : 'error', result: data.result })
 
         if (data.name === 'analyze_storage' && success) {
-          const result = data.result as { success: boolean; data?: unknown }
+          const result = data.result as { success: boolean; data?: StorageAnalysisData }
           if (result.data) {
             console.log('[APP] Storage analysis data received, switching to Storage tab')
             setStorageAnalysis(result.data)
@@ -380,7 +379,6 @@ function App(): JSX.Element {
 
   const handleTemplateSelect = (command: string) => handleSendMessage(command)
 
-  // Show loading while checking setup
   if (isCheckingSetup) {
     return (
       <div className="h-screen bg-slate-900 flex items-center justify-center">
@@ -392,7 +390,6 @@ function App(): JSX.Element {
     )
   }
 
-  // Show setup screen if no API key
   if (needsSetup) {
     return <SetupScreen onComplete={handleSetupComplete} />
   }
