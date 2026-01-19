@@ -48,7 +48,7 @@ export interface WatcherState {
 
 type FolderSelectMode = 'none' | 'watch' | 'destination'
 
-interface AgentState {
+export interface AgentState {
   // Mode
   mode: 'chat' | 'agent'
   status: 'idle' | 'running' | 'paused'
@@ -64,6 +64,9 @@ interface AgentState {
     field?: 'watch' | 'destination'
   } | null
   
+  // Computed property for easy access
+  selectingForWatcherId: string | undefined
+  
   // Actions - Mode
   setMode: (mode: 'chat' | 'agent') => void
   setStatus: (status: 'idle' | 'running' | 'paused') => void
@@ -74,6 +77,7 @@ interface AgentState {
   updateWatcherConfig: (watcherId: string, config: Partial<AgentConfig>) => void
   setWatcherStatus: (watcherId: string, status: 'idle' | 'running' | 'paused' | 'error') => void
   updateWatcherStats: (watcherId: string, updates: Partial<WatcherStats>) => void
+  incrementWatcherStat: (watcherId: string, stat: keyof WatcherStats) => void
   addWatcherActivity: (watcherId: string, entry: ActivityEntry) => void
   clearWatcherActivity: (watcherId: string) => void
   setActiveWatcher: (watcherId: string | null) => void
@@ -87,6 +91,7 @@ interface AgentState {
   getWatcherCount: () => number
   canAddWatcher: () => boolean
   getActiveWatcher: () => WatcherState | null
+  getWatcherDuration: (watcherId: string) => number
 }
 
 const MAX_WATCHERS = 5
@@ -100,6 +105,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   activeWatcherId: null,
   folderSelectMode: 'none',
   pendingFolderSelect: null,
+  
+  // Computed property
+  get selectingForWatcherId() {
+    return get().pendingFolderSelect?.watcherId
+  },
 
   // Mode actions
   setMode: (mode) => set({ mode }),
@@ -200,6 +210,23 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     set({ watchers: newWatchers })
   },
 
+  incrementWatcherStat: (watcherId, stat) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (!watcher) return
+    
+    const newWatchers = new Map(watchers)
+    newWatchers.set(watcherId, {
+      ...watcher,
+      stats: {
+        ...watcher.stats,
+        [stat]: (watcher.stats[stat] || 0) + 1
+      }
+    })
+    
+    set({ watchers: newWatchers })
+  },
+
   addWatcherActivity: (watcherId, entry) => {
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
@@ -241,11 +268,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   completeFolderSelect: (folderPath) => {
-    const { pendingFolderSelect, watchers } = get()
+    const { pendingFolderSelect } = get()
     
     if (pendingFolderSelect?.watcherId) {
-      const watcher = watchers.get(pendingFolderSelect.watcherId)
-      if (watcher && pendingFolderSelect.field === 'watch') {
+      if (pendingFolderSelect.field === 'watch') {
         get().updateWatcherConfig(pendingFolderSelect.watcherId, {
           watchFolder: folderPath
         })
@@ -274,5 +300,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers, activeWatcherId } = get()
     if (!activeWatcherId) return null
     return watchers.get(activeWatcherId) || null
+  },
+  
+  getWatcherDuration: (watcherId) => {
+    const { watchers } = get()
+    const watcher = watchers.get(watcherId)
+    if (!watcher || watcher.stats.startTime === 0) return 0
+    return Math.floor((Date.now() - watcher.stats.startTime) / 1000)
   }
 }))

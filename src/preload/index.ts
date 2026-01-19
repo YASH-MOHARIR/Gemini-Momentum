@@ -104,7 +104,7 @@ export interface AgentRule {
 }
 
 export interface AgentConfig {
-  id: string  // NEW: Unique watcher ID
+  id: string
   watchFolder: string
   rules: AgentRule[]
   enableActivityLog: boolean
@@ -113,7 +113,7 @@ export interface AgentConfig {
 
 export interface ActivityEntry {
   id: string
-  watcherId: string  // NEW: Track which watcher processed this
+  watcherId: string
   timestamp: string
   originalName: string
   originalPath: string
@@ -140,7 +140,104 @@ export interface WatcherStats {
   errors: number
 }
 
-const api = {
+// ============ Pending Actions API ============
+
+export interface PendingAPI {
+  getAll: () => Promise<PendingAction[]>
+  getCount: () => Promise<number>
+  getSize: () => Promise<number>
+  queueDeletion: (filePath: string, reason?: string) => Promise<PendingAction>
+  queueMultiple: (filePaths: string[], reason?: string) => Promise<PendingAction[]>
+  executeOne: (actionId: string) => Promise<ActionResult>
+  executeAll: () => Promise<ActionResult[]>
+  executeSelected: (actionIds: string[]) => Promise<ActionResult[]>
+  removeOne: (actionId: string) => Promise<boolean>
+  keepAll: () => Promise<number>
+  clear: () => Promise<void>
+  onNewAction: (callback: (action: PendingAction) => void) => () => void
+}
+
+// ============ Electron API Type ============
+
+export interface ElectronAPI {
+  selectFolder: () => Promise<string | null>
+  getVersion: () => Promise<string>
+  platform: string
+  fs: {
+    listDir: (path: string) => Promise<FileEntry[]>
+    expandDir: (path: string) => Promise<FileEntry[]>
+    readFile: (path: string) => Promise<string>
+    readFileBuffer: (path: string) => Promise<string>
+    getFileInfo: (path: string) => Promise<FileInfo>
+    pathExists: (path: string) => Promise<boolean>
+    getDirSize: (path: string) => Promise<number>
+    writeFile: (path: string, content: string) => Promise<OperationResult>
+    createFolder: (path: string) => Promise<OperationResult>
+    deleteFile: (path: string) => Promise<OperationResult>
+    permanentDelete: (path: string) => Promise<OperationResult>
+    moveFile: (from: string, to: string) => Promise<OperationResult>
+    renameFile: (path: string, newName: string) => Promise<OperationResult>
+    copyFile: (from: string, to: string) => Promise<OperationResult>
+    getTrash: () => Promise<TrashEntry[]>
+    restoreFromTrash: (trashPath: string) => Promise<OperationResult>
+    emptyTrash: () => Promise<OperationResult>
+    onChanged: (callback: () => void) => () => void
+  }
+  agent: {
+    init: (apiKey: string) => Promise<{ success: boolean; error?: string }>
+    isReady: () => Promise<boolean>
+    chat: (messages: ChatMessage[], grantedFolders: string[], selectedFile?: string, isDirectory?: boolean) => Promise<AgentResponse>
+    test: () => Promise<{ success: boolean; error?: string }>
+    getMetrics: () => Promise<SessionMetrics>
+    resetMetrics: () => Promise<void>
+    onStreamChunk: (callback: (chunk: string) => void) => () => void
+    onStreamEnd: (callback: () => void) => () => void
+    onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => () => void
+    onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
+    onRoutingStart: (callback: () => void) => () => void
+    onRoutingComplete: (callback: (classification: TaskClassification) => void) => () => void
+  }
+  pending: PendingAPI
+  google: {
+    isInitialized: () => Promise<boolean>
+    isSignedIn: () => Promise<boolean>
+    getUser: () => Promise<GoogleUser | null>
+    signIn: () => Promise<{ success: boolean; error?: string }>
+    signOut: () => Promise<{ success: boolean }>
+    createSheet: (data: { title: string; headers: string[]; rows: (string | number)[][]; sheetName?: string }) => Promise<{ success: boolean; spreadsheetUrl?: string; error?: string }>
+    searchGmail: (query: string, maxResults?: number) => Promise<{ success: boolean; emails?: unknown[]; error?: string }>
+    onSignedIn: (callback: () => void) => () => void
+    onSignedOut: (callback: () => void) => () => void
+  }
+  watcher: {
+    start: (config: AgentConfig) => Promise<{ success: boolean; error?: string; watcherId?: string }>
+    stop: (watcherId: string) => Promise<{ success: boolean }>
+    stopAll: () => Promise<{ success: boolean; count: number }>
+    pause: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
+    resume: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
+    getStatus: (watcherId?: string) => Promise<WatcherStatus>
+    getAll: () => Promise<AgentConfig[]>
+    getStats: (watcherId: string) => Promise<WatcherStats | null>
+    updateRules: (watcherId: string, rules: AgentRule[]) => Promise<{ success: boolean }>
+    onReady: (callback: (watcherId: string) => void) => () => void
+    onFileDetected: (callback: (watcherId: string, data: { path: string; name: string }) => void) => () => void
+    onFileProcessed: (callback: (watcherId: string, entry: ActivityEntry) => void) => () => void
+    onError: (callback: (watcherId: string, error: string) => void) => () => void
+    onAllStopped: (callback: () => void) => () => void
+  }
+  config: {
+    getApiKeys: () => Promise<{ hasGeminiKey: boolean }>
+    saveApiKeys: (keys: { geminiKey: string }) => Promise<{ success: boolean; error?: string }>
+  }
+}
+
+declare global {
+  interface Window {
+    api: ElectronAPI
+  }
+}
+
+const api: ElectronAPI = {
   // App
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
   getVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
@@ -192,7 +289,7 @@ const api = {
     init: (apiKey: string): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('agent:init', apiKey),
     isReady: (): Promise<boolean> => ipcRenderer.invoke('agent:is-ready'),
-chat: (
+    chat: (
       messages: ChatMessage[],
       grantedFolders: string[],
       selectedFile?: string,
@@ -351,6 +448,14 @@ chat: (
       ipcRenderer.on('watcher:all-stopped', handler)
       return () => ipcRenderer.removeListener('watcher:all-stopped', handler)
     }
+  },
+
+  // Config API
+  config: {
+    getApiKeys: (): Promise<{ hasGeminiKey: boolean }> =>
+      ipcRenderer.invoke('config:get-api-keys'),
+    saveApiKeys: (keys: { geminiKey: string }): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('config:save-api-keys', keys)
   }
 }
 
