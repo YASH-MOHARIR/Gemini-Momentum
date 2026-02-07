@@ -192,7 +192,7 @@ function App(): ReactElement {
     beforeAfterResult,
     addFolder, removeFolder, setSelectedFile, addMessage, setProcessing,
     setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask, setStorageAnalysis,
-    hideBeforeAfter
+    hideBeforeAfter, selectAll, clearSelection, getSelectedCount, getSelectedFiles
   } = useAppStore()
 
   // Check if setup is needed on mount
@@ -248,6 +248,47 @@ function App(): ReactElement {
       }
     }
     checkGoogle()
+  }, [])
+
+  // Keyboard shortcuts for multi-select
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + A: Select all files in current folder
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !isAgentMode) {
+        e.preventDefault()
+        const allPaths: string[] = []
+        folders.forEach(folder => {
+          const collectPaths = (entries: FileEntry[]) => {
+            entries.forEach(entry => {
+              if (!entry.isDirectory) {
+                allPaths.push(entry.path)
+              }
+              if (entry.children) {
+                collectPaths(entry.children)
+              }
+            })
+          }
+          collectPaths(folder.entries)
+        })
+        selectAll(allPaths)
+      }
+
+      // Escape: Clear selection
+      if (e.key === 'Escape' && !isAgentMode) {
+        clearSelection()
+      }
+
+      // Delete: Delete selected files (if any selected)
+      if (e.key === 'Delete' && !isAgentMode && getSelectedCount() > 0) {
+        e.preventDefault()
+        // TODO: Implement batch delete in Phase 3
+        console.log('Delete key pressed, selected files:', getSelectedFiles())
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [folders, isAgentMode, selectAll, clearSelection, getSelectedCount, getSelectedFiles])
     const unsubSignedIn = window.api.google.onSignedIn(() => setIsGoogleConnected(true))
     const unsubSignedOut = window.api.google.onSignedOut(() => setIsGoogleConnected(false))
     return () => { unsubSignedIn(); unsubSignedOut() }
