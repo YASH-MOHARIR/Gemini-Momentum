@@ -51,7 +51,11 @@ export function resetMetrics(): void {
   }
 }
 
-export function updateMetrics(profile: ExecutorProfile, inputTokens: number, outputTokens: number): void {
+export function updateMetrics(
+  profile: ExecutorProfile,
+  inputTokens: number,
+  outputTokens: number
+): void {
   const pricing = PRICING[profile === 'pro-high' ? MODELS.PRO : MODELS.FLASH]
 
   sessionMetrics.totalInputTokens += inputTokens

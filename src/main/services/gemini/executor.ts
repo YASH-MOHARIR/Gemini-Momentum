@@ -8,20 +8,33 @@ import * as storageAnalyzer from '../storageAnalyzer'
 import * as googleSheets from '../googleSheets'
 import * as gmail from '../gmail'
 import { isSignedIn as isGoogleSignedIn } from '../googleAuth'
-import { analyzeImage, processReceiptsBatch, smartRenameFile, categorizeImages, extractReceiptData } from './vision'
+import {
+  analyzeImage,
+  processReceiptsBatch,
+  smartRenameFile,
+  categorizeImages,
+  extractReceiptData
+} from './vision'
 
 // ============ TOOL EXECUTOR ============
 
 // Track tools that modify the file system
 const FILE_MODIFYING_TOOLS = [
-  'write_file', 'create_folder', 'move_file', 
-  'rename_file', 'copy_file', 'execute_organization', 
-  'categorize_images', 'smart_rename', 'process_receipts',
-  'create_spreadsheet', 'create_expense_report'
+  'write_file',
+  'create_folder',
+  'move_file',
+  'rename_file',
+  'copy_file',
+  'execute_organization',
+  'categorize_images',
+  'smart_rename',
+  'process_receipts',
+  'create_spreadsheet',
+  'create_expense_report'
 ]
 
 export async function executeTool(
-  name: string, 
+  name: string,
   args: Record<string, string>,
   mainWindow?: BrowserWindow | null
 ): Promise<unknown> {
@@ -51,8 +64,8 @@ export async function executeTool(
         // Queue for review instead of direct deletion
         try {
           const action = await pendingActions.queueDeletion(args.path, 'Requested by AI assistant')
-          result = { 
-            success: true, 
+          result = {
+            success: true,
             queued: true,
             message: `File "${action.fileName}" has been queued for deletion. Please review in the Review panel before it is permanently deleted.`,
             actionId: action.id
@@ -81,9 +94,9 @@ export async function executeTool(
       case 'analyze_storage': {
         const folderPath = String(args.path)
         const depth = args.depth ? Number(args.depth) : 3
-        
+
         const analysis = await storageAnalyzer.analyzeStorage(folderPath, depth)
-        
+
         // Format the response nicely
         const summary = [
           `**Storage Analysis Complete**`,
@@ -92,16 +105,18 @@ export async function executeTool(
           ``,
           `**By Type:**`
         ]
-        
-        analysis.byType.slice(0, 5).forEach(cat => {
-          summary.push(`• ${cat.type}: ${storageAnalyzer.formatBytes(cat.size)} (${cat.percentage.toFixed(1)}%)`)
+
+        analysis.byType.slice(0, 5).forEach((cat) => {
+          summary.push(
+            `• ${cat.type}: ${storageAnalyzer.formatBytes(cat.size)} (${cat.percentage.toFixed(1)}%)`
+          )
         })
-        
+
         if (analysis.suggestions.length > 0) {
           summary.push(``, `**💡 Suggestions:**`)
-          analysis.suggestions.forEach(s => summary.push(`• ${s}`))
+          analysis.suggestions.forEach((s) => summary.push(`• ${s}`))
         }
-        
+
         result = {
           success: true,
           data: analysis,
@@ -188,11 +203,10 @@ export async function executeTool(
         try {
           // Handle both boolean true and string 'true' from Gemini
           const shouldExecute = String(args.execute).toLowerCase() === 'true'
-          console.log(`[CATEGORIZE] shouldExecute resolved to: ${shouldExecute} (raw: ${args.execute}, type: ${typeof args.execute})`)
-          result = await categorizeImages(
-            args.folder_path,
-            shouldExecute
+          console.log(
+            `[CATEGORIZE] shouldExecute resolved to: ${shouldExecute} (raw: ${args.execute}, type: ${typeof args.execute})`
           )
+          result = await categorizeImages(args.folder_path, shouldExecute)
         } catch (error) {
           result = { error: `Failed to categorize images: ${error}` }
         }
@@ -201,7 +215,10 @@ export async function executeTool(
       case 'export_to_google_sheets': {
         const signedIn = await isGoogleSignedIn()
         if (!signedIn) {
-          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          result = {
+            error:
+              'Not signed into Google. Please connect your Google account first using the button in the header.'
+          }
           break
         }
         try {
@@ -222,7 +239,10 @@ export async function executeTool(
       case 'create_expense_report_sheets': {
         const signedIn = await isGoogleSignedIn()
         if (!signedIn) {
-          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          result = {
+            error:
+              'Not signed into Google. Please connect your Google account first using the button in the header.'
+          }
           break
         }
         try {
@@ -237,7 +257,10 @@ export async function executeTool(
       case 'search_gmail': {
         const signedIn = await isGoogleSignedIn()
         if (!signedIn) {
-          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          result = {
+            error:
+              'Not signed into Google. Please connect your Google account first using the button in the header.'
+          }
           break
         }
         const maxResults = parseInt(args.max_results) || 20
@@ -248,7 +271,10 @@ export async function executeTool(
       case 'download_gmail_receipts': {
         const signedIn = await isGoogleSignedIn()
         if (!signedIn) {
-          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          result = {
+            error:
+              'Not signed into Google. Please connect your Google account first using the button in the header.'
+          }
           break
         }
         const maxEmails = parseInt(args.max_emails) || 20
@@ -259,28 +285,37 @@ export async function executeTool(
       case 'gmail_to_expense_report': {
         const signedIn = await isGoogleSignedIn()
         if (!signedIn) {
-          result = { error: 'Not signed into Google. Please connect your Google account first using the button in the header.' }
+          result = {
+            error:
+              'Not signed into Google. Please connect your Google account first using the button in the header.'
+          }
           break
         }
-        
+
         try {
           // Step 1: Download receipts from Gmail
           const tempDir = require('path').join(app.getPath('userData'), 'gmail-receipts-temp')
           await require('fs/promises').mkdir(tempDir, { recursive: true })
-          
+
           console.log('[GMAIL→SHEETS] Step 1: Downloading receipts from Gmail...')
-          const downloadResult = await gmail.searchAndDownloadReceipts(args.gmail_query, tempDir, 30)
-          
+          const downloadResult = await gmail.searchAndDownloadReceipts(
+            args.gmail_query,
+            tempDir,
+            30
+          )
+
           if (!downloadResult.success || downloadResult.attachmentsDownloaded.length === 0) {
-            result = { 
-              success: false, 
-              error: downloadResult.error || 'No receipt attachments found in matching emails' 
+            result = {
+              success: false,
+              error: downloadResult.error || 'No receipt attachments found in matching emails'
             }
             break
           }
-          
-          console.log(`[GMAIL→SHEETS] Downloaded ${downloadResult.attachmentsDownloaded.length} attachments`)
-          
+
+          console.log(
+            `[GMAIL→SHEETS] Downloaded ${downloadResult.attachmentsDownloaded.length} attachments`
+          )
+
           // Step 2: Process each receipt with Vision
           console.log('[GMAIL→SHEETS] Step 2: Analyzing receipts with Vision...')
           const expenses: Array<{
@@ -290,7 +325,7 @@ export async function executeTool(
             description: string
             amount: number
           }> = []
-          
+
           for (const att of downloadResult.attachmentsDownloaded) {
             // Only process images (PDFs would need different handling)
             if (att.mimeType.includes('image')) {
@@ -309,30 +344,37 @@ export async function executeTool(
                 console.error(`[GMAIL→SHEETS] Failed to process ${att.filename}:`, err)
               }
               // Rate limit
-              await new Promise(r => setTimeout(r, 500))
+              await new Promise((r) => setTimeout(r, 500))
             }
           }
-          
+
           if (expenses.length === 0) {
-            result = { 
-              success: false, 
-              error: 'Could not extract data from any receipts' 
+            result = {
+              success: false,
+              error: 'Could not extract data from any receipts'
             }
             break
           }
-          
-          console.log(`[GMAIL→SHEETS] Step 3: Creating Google Sheet with ${expenses.length} expenses...`)
-          
+
+          console.log(
+            `[GMAIL→SHEETS] Step 3: Creating Google Sheet with ${expenses.length} expenses...`
+          )
+
           // Step 3: Create Google Sheet
-          const sheetResult = await googleSheets.createExpenseReportSheet(args.report_title, expenses)
-          
+          const sheetResult = await googleSheets.createExpenseReportSheet(
+            args.report_title,
+            expenses
+          )
+
           // Clean up temp files
           try {
             for (const att of downloadResult.attachmentsDownloaded) {
-              await require('fs/promises').unlink(att.localPath).catch(() => {})
+              await require('fs/promises')
+                .unlink(att.localPath)
+                .catch(() => {})
             }
           } catch {}
-          
+
           result = {
             success: sheetResult.success,
             emailsSearched: downloadResult.emailsFound,
@@ -342,7 +384,6 @@ export async function executeTool(
             spreadsheetUrl: sheetResult.spreadsheetUrl,
             error: sheetResult.error
           }
-          
         } catch (error) {
           result = { success: false, error: String(error) }
         }
@@ -354,13 +395,13 @@ export async function executeTool(
     }
 
     console.log(`[TOOL RESULT] ${name}:`, JSON.stringify(result).substring(0, 500))
-    
+
     // Send file system refresh signal for modifying operations
     if (FILE_MODIFYING_TOOLS.includes(name) && mainWindow) {
       console.log(`[FS] Sending refresh signal after ${name}`)
       mainWindow.webContents.send('fs:changed')
     }
-    
+
     return result
   } catch (err) {
     console.error(`[TOOL ERROR] ${name}:`, err)

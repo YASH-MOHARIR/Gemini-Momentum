@@ -337,10 +337,10 @@ ipcMain.handle(
     _,
     messages: gemini.ChatMessage[],
     grantedFolders: string[],
-    selectedFile?: string,
+    selectedFiles?: string[],
     isDirectory?: boolean
   ) => {
-    return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile, isDirectory)
+    return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFiles, isDirectory)
   }
 )
 

@@ -10,9 +10,7 @@ export default function AgentModeToggle() {
   const handleToggle = async () => {
     if (isRunning || isPaused) {
       // Confirm before switching off while Orbit is active
-      const confirmed = window.confirm(
-        'Stop all Orbits and exit Orbit Mode?'
-      )
+      const confirmed = window.confirm('Stop all Orbits and exit Orbit Mode?')
       if (!confirmed) return
 
       // Stop the watcher
@@ -33,25 +31,22 @@ export default function AgentModeToggle() {
       className={`
         relative flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium
         transition-all duration-300 ease-out
-        ${isAgent
-          ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/30'
-          : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+        ${
+          isAgent
+            ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/30'
+            : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
         }
         ${isRunning ? 'agent-active-glow' : ''}
       `}
-      title={isAgent ? 'Switch to Chat Mode' : 'Switch to Orbit Mode - Create AI-powered file watchers'}
+      title={
+        isAgent ? 'Switch to Chat Mode' : 'Switch to Orbit Mode - Create AI-powered file watchers'
+      }
     >
       {/* Icon */}
-      {isAgent ? (
-        <Bot className="w-4 h-4" />
-      ) : (
-        <Zap className="w-4 h-4" />
-      )}
+      {isAgent ? <Bot className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
 
       {/* Label */}
-      <span className="hidden sm:inline">
-        {isAgent ? 'Orbit Mode' : 'Chat'}
-      </span>
+      <span className="hidden sm:inline">{isAgent ? 'Orbit Mode' : 'Chat'}</span>
 
       {/* Status indicator */}
       {isRunning && (

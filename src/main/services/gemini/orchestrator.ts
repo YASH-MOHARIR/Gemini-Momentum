@@ -28,29 +28,50 @@ export interface AgentResponse {
 
 // ============ SYSTEM INSTRUCTION BUILDER ============
 
+// ... (imports remain same)
+
+// ============ SYSTEM INSTRUCTION BUILDER ============
+
 function buildSystemInstruction(
   workingFolder: string,
-  selectedFile?: string,
+  selectedFiles?: string[],
   isDirectory?: boolean
 ): string {
   let selectedContext = ''
   let targetFolder = workingFolder
 
-  if (selectedFile) {
-    if (isDirectory) {
-      // Selected a folder - use it as the target
-      targetFolder = selectedFile
-      selectedContext = `\n\nSELECTED FOLDER: ${selectedFile}
+  if (selectedFiles && selectedFiles.length > 0) {
+    if (selectedFiles.length === 1) {
+      const selectedFile = selectedFiles[0]
+      if (isDirectory) {
+        // Selected a folder - use it as the target
+        targetFolder = selectedFile
+        selectedContext = `\n\nSELECTED FOLDER: ${selectedFile}
 When the user asks to "analyze storage", "organize", or refers to "this folder", use: ${selectedFile}`
-    } else {
-      // Selected a file - extract parent directory
-      const pathParts = selectedFile.split(/[/\\]/)
-      pathParts.pop() // Remove filename
-      const parentFolder = pathParts.join(selectedFile.includes('/') ? '/' : '\\')
+      } else {
+        // Selected a file - extract parent directory
+        const pathParts = selectedFile.split(/[/\\]/)
+        pathParts.pop() // Remove filename
+        const parentFolder = pathParts.join(selectedFile.includes('/') ? '/' : '\\')
 
-      selectedContext = `\n\nSELECTED FILE: ${selectedFile}
+        selectedContext = `\n\nSELECTED FILE: ${selectedFile}
 When the user says "this file", they mean: ${selectedFile}
 If they ask to analyze storage or organize, use the parent folder: ${parentFolder || workingFolder}`
+      }
+    } else {
+      // Multiple files selected
+      const count = selectedFiles.length
+      const fileList = selectedFiles
+        .slice(0, 20)
+        .map((f) => `- ${f}`)
+        .join('\n')
+      const more = count > 20 ? `\n...and ${count - 20} more files` : ''
+
+      selectedContext = `\n\nSELECTED FILES (${count}):
+${fileList}${more}
+
+When the user says "these files" or "selected files", refer to the list above.
+You can perform batch operations on these files like analyze, move, copy, or delete.`
     }
   }
 
@@ -120,7 +141,7 @@ export async function chatStream(
   messages: ChatMessage[],
   grantedFolders: string[],
   mainWindow: BrowserWindow | null,
-  selectedFile?: string,
+  selectedFiles?: string[],
   isSelectedDirectory?: boolean
 ): Promise<AgentResponse> {
   const client = getClient()
@@ -130,8 +151,8 @@ export async function chatStream(
 
   console.log('[ORCHESTRATOR] Starting 2-layer processing')
   console.log('[ORCHESTRATOR] User message:', lastMessage.substring(0, 100))
-  if (selectedFile && isSelectedDirectory) {
-    console.log('[ORCHESTRATOR] Selected folder (will be used for storage/organize):', selectedFile)
+  if (selectedFiles && selectedFiles.length > 0) {
+    console.log(`[ORCHESTRATOR] Selected ${selectedFiles.length} files/folders`)
   }
 
   // ===== LAYER 1: ROUTER =====
@@ -139,7 +160,7 @@ export async function chatStream(
 
   let classification: TaskClassification
   try {
-    classification = await classifyTask(lastMessage, selectedFile)
+    classification = await classifyTask(lastMessage, selectedFiles)
     updateMetrics('flash-minimal', 100, 50)
   } catch (error) {
     console.error('[ORCHESTRATOR] Router failed:', error)
@@ -167,7 +188,7 @@ export async function chatStream(
   try {
     const systemInstruction = buildSystemInstruction(
       workingFolder,
-      selectedFile,
+      selectedFiles,
       isSelectedDirectory
     )
 
@@ -276,7 +297,7 @@ export async function chatStream(
         messages,
         grantedFolders,
         mainWindow,
-        selectedFile,
+        selectedFiles,
         isSelectedDirectory,
         'pro-high',
         classification
@@ -298,7 +319,7 @@ async function chatStreamWithExecutor(
   messages: ChatMessage[],
   grantedFolders: string[],
   mainWindow: BrowserWindow | null,
-  selectedFile: string | undefined,
+  selectedFiles: string[] | undefined,
   isSelectedDirectory: boolean | undefined,
   executorProfile: ExecutorProfile,
   classification?: TaskClassification
@@ -314,7 +335,7 @@ async function chatStreamWithExecutor(
   try {
     const systemInstruction = buildSystemInstruction(
       workingFolder,
-      selectedFile,
+      selectedFiles,
       isSelectedDirectory
     )
 
@@ -413,8 +434,8 @@ async function chatStreamWithExecutor(
 export async function chat(
   messages: ChatMessage[],
   grantedFolders: string[],
-  selectedFile?: string,
+  selectedFiles?: string[],
   isSelectedDirectory?: boolean
 ): Promise<AgentResponse> {
-  return chatStream(messages, grantedFolders, null, selectedFile, isSelectedDirectory)
+  return chatStream(messages, grantedFolders, null, selectedFiles, isSelectedDirectory)
 }

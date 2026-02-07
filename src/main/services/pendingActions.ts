@@ -27,10 +27,7 @@ function generateId(): string {
   return `action_${Date.now()}_${++actionIdCounter}`
 }
 
-export async function queueDeletion(
-  filePath: string,
-  reason?: string
-): Promise<PendingAction> {
+export async function queueDeletion(filePath: string, reason?: string): Promise<PendingAction> {
   try {
     const stats = await fs.stat(filePath)
     const action: PendingAction = {
@@ -42,10 +39,10 @@ export async function queueDeletion(
       reason,
       createdAt: new Date().toISOString()
     }
-    
+
     pendingQueue.push(action)
     console.log(`[PENDING] Queued deletion: ${action.fileName}`)
-    
+
     return action
   } catch (error) {
     throw new Error(`Failed to queue deletion: ${error}`)
@@ -57,7 +54,7 @@ export async function queueMultipleDeletions(
   reason?: string
 ): Promise<PendingAction[]> {
   const actions: PendingAction[] = []
-  
+
   for (const filePath of filePaths) {
     try {
       const action = await queueDeletion(filePath, reason)
@@ -66,7 +63,7 @@ export async function queueMultipleDeletions(
       console.error(`[PENDING] Failed to queue ${filePath}:`, error)
     }
   }
-  
+
   return actions
 }
 
@@ -84,7 +81,7 @@ export function clearPendingActions(): void {
 }
 
 export function removeAction(actionId: string): boolean {
-  const index = pendingQueue.findIndex(a => a.id === actionId)
+  const index = pendingQueue.findIndex((a) => a.id === actionId)
   if (index !== -1) {
     const action = pendingQueue[index]
     pendingQueue.splice(index, 1)
@@ -95,22 +92,22 @@ export function removeAction(actionId: string): boolean {
 }
 
 export async function executeAction(actionId: string): Promise<ActionResult> {
-  const index = pendingQueue.findIndex(a => a.id === actionId)
-  
+  const index = pendingQueue.findIndex((a) => a.id === actionId)
+
   if (index === -1) {
     return { id: actionId, success: false, error: 'Action not found in queue' }
   }
-  
+
   const action = pendingQueue[index]
-  
+
   try {
     if (action.type === 'delete') {
       await fileSystem.deleteFile(action.sourcePath)
     }
-    
+
     pendingQueue.splice(index, 1)
     console.log(`[PENDING] Executed: ${action.type} ${action.fileName}`)
-    
+
     return { id: actionId, success: true }
   } catch (error) {
     console.error(`[PENDING] Failed to execute ${action.type}:`, error)
@@ -121,23 +118,23 @@ export async function executeAction(actionId: string): Promise<ActionResult> {
 export async function executeAllActions(): Promise<ActionResult[]> {
   const results: ActionResult[] = []
   const actionsToProcess = [...pendingQueue]
-  
+
   for (const action of actionsToProcess) {
     const result = await executeAction(action.id)
     results.push(result)
   }
-  
+
   return results
 }
 
 export async function executeSelectedActions(actionIds: string[]): Promise<ActionResult[]> {
   const results: ActionResult[] = []
-  
+
   for (const id of actionIds) {
     const result = await executeAction(id)
     results.push(result)
   }
-  
+
   return results
 }
 

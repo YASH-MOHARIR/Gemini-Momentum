@@ -331,11 +331,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectionMode: (mode) => {
     set({ selectionMode: mode })
   },
-        }
-        break
-      }
-    }
-  },
 
   // Chat actions
   addMessage: (message) => {

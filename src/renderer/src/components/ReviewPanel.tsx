@@ -39,7 +39,7 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(false)
   const [isExecuting, setIsExecuting] = useState(false)
-  
+
   const highlightFiles = useAppStore((state) => state.highlightFiles)
   const refreshFolder = useAppStore((state) => state.refreshFolder)
 
@@ -62,7 +62,7 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
   }, [])
 
   const toggleSelection = (id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const newSelected = new Set(prev)
       if (newSelected.has(id)) {
         newSelected.delete(id)
@@ -86,20 +86,25 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
 
     setIsExecuting(true)
     try {
-      const selectedActions = actions.filter(a => selectedIds.has(a.id))
-      const paths = selectedActions.map(a => a.sourcePath)
-      
+      const selectedActions = actions.filter((a) => selectedIds.has(a.id))
+      const paths = selectedActions.map((a) => a.sourcePath)
+
       highlightFiles(paths, 'delete', 3000)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       await window.api.pending.executeSelected(Array.from(selectedIds))
-      
+
       if (selectedActions.length > 0) {
         const firstPath = selectedActions[0].sourcePath
-        const folderPath = firstPath.substring(0, firstPath.lastIndexOf(/[/\\]/.test(firstPath) ? (firstPath.includes('\\') ? '\\' : '/') : '/'))
+        const folderPath = firstPath.substring(
+          0,
+          firstPath.lastIndexOf(
+            /[/\\]/.test(firstPath) ? (firstPath.includes('\\') ? '\\' : '/') : '/'
+          )
+        )
         await refreshFolder(folderPath)
       }
-      
+
       await fetchActions()
       onComplete?.()
     } catch (err) {
@@ -111,19 +116,24 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
   const handleDeleteAll = async () => {
     setIsExecuting(true)
     try {
-      const paths = actions.map(a => a.sourcePath)
+      const paths = actions.map((a) => a.sourcePath)
       highlightFiles(paths, 'delete', 3000)
-      
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       await window.api.pending.executeAll()
-      
+
       if (actions.length > 0) {
         const firstPath = actions[0].sourcePath
-        const folderPath = firstPath.substring(0, firstPath.lastIndexOf(/[/\\]/.test(firstPath) ? (firstPath.includes('\\') ? '\\' : '/') : '/'))
+        const folderPath = firstPath.substring(
+          0,
+          firstPath.lastIndexOf(
+            /[/\\]/.test(firstPath) ? (firstPath.includes('\\') ? '\\' : '/') : '/'
+          )
+        )
         await refreshFolder(folderPath)
       }
-      
+
       await fetchActions()
       onComplete?.()
     } catch (err) {
@@ -186,15 +196,22 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
           <span className="font-medium text-sm">Review Required</span>
         </div>
         <p className="text-xs text-slate-400 mt-1">
-          {actions.length} file{actions.length !== 1 ? 's' : ''} marked for deletion ({formatSize(totalSize)})
+          {actions.length} file{actions.length !== 1 ? 's' : ''} marked for deletion (
+          {formatSize(totalSize)})
         </p>
       </div>
 
       <div className="px-3 py-2 border-b border-slate-700 flex items-center gap-2 text-xs">
-        <button onClick={selectAll} className={`px-2 py-1 rounded transition-colors ${selectedIds.size === actions.length ? 'bg-sky-600 text-white' : 'text-sky-400 hover:text-sky-300 hover:bg-slate-700'}`}>
+        <button
+          onClick={selectAll}
+          className={`px-2 py-1 rounded transition-colors ${selectedIds.size === actions.length ? 'bg-sky-600 text-white' : 'text-sky-400 hover:text-sky-300 hover:bg-slate-700'}`}
+        >
           Select All
         </button>
-        <button onClick={selectNone} className={`px-2 py-1 rounded transition-colors ${selectedIds.size === 0 ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700'}`}>
+        <button
+          onClick={selectNone}
+          className={`px-2 py-1 rounded transition-colors ${selectedIds.size === 0 ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700'}`}
+        >
           Select None
         </button>
         <span className="ml-auto text-slate-500">
@@ -210,15 +227,24 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
               key={action.id}
               onClick={() => toggleSelection(action.id)}
               className={`px-3 py-2.5 border-b border-slate-700/50 flex items-center gap-3 cursor-pointer transition-all ${
-                isSelected ? 'bg-red-900/30 hover:bg-red-900/40 border-l-2 border-red-500' : 'bg-slate-800/30 hover:bg-slate-700/50 border-l-2 border-transparent'
+                isSelected
+                  ? 'bg-red-900/30 hover:bg-red-900/40 border-l-2 border-red-500'
+                  : 'bg-slate-800/30 hover:bg-slate-700/50 border-l-2 border-transparent'
               }`}
             >
-              <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-red-500 text-white' : 'bg-slate-700 border border-slate-600'}`}>
+              <div
+                className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-red-500 text-white' : 'bg-slate-700 border border-slate-600'}`}
+              >
                 {isSelected && <Check className="w-3 h-3" />}
               </div>
-              <FileWarning className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-red-400' : 'text-amber-500'}`} />
+              <FileWarning
+                className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-red-400' : 'text-amber-500'}`}
+              />
               <div className="flex-1 min-w-0">
-                <p className={`text-sm truncate ${isSelected ? 'text-red-200' : 'text-slate-200'}`} title={action.sourcePath}>
+                <p
+                  className={`text-sm truncate ${isSelected ? 'text-red-200' : 'text-slate-200'}`}
+                  title={action.sourcePath}
+                >
                   {action.fileName}
                 </p>
                 <p className="text-xs text-slate-500 truncate" title={action.sourcePath}>
@@ -226,10 +252,18 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
                 </p>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {formatSize(action.fileSize)}
-                  {action.reason && <span className="ml-1 text-slate-600">• {action.reason.split('\n')[0].substring(0, 30)}...</span>}
+                  {action.reason && (
+                    <span className="ml-1 text-slate-600">
+                      • {action.reason.split('\n')[0].substring(0, 30)}...
+                    </span>
+                  )}
                 </p>
               </div>
-              <button onClick={(e) => handleKeepOne(e, action.id)} className="p-1.5 rounded hover:bg-slate-600 text-slate-400 hover:text-emerald-400 transition-colors flex-shrink-0" title="Keep this file">
+              <button
+                onClick={(e) => handleKeepOne(e, action.id)}
+                className="p-1.5 rounded hover:bg-slate-600 text-slate-400 hover:text-emerald-400 transition-colors flex-shrink-0"
+                title="Keep this file"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -238,16 +272,34 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
       </div>
 
       <div className="p-3 border-t border-slate-700 space-y-2">
-        <button onClick={handleDeleteSelected} disabled={selectedIds.size === 0 || isExecuting} className="w-full px-3 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
-          {isExecuting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+        <button
+          onClick={handleDeleteSelected}
+          disabled={selectedIds.size === 0 || isExecuting}
+          className="w-full px-3 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
+        >
+          {isExecuting ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
           Delete Selected ({selectedIds.size})
         </button>
         <div className="flex gap-2">
-          <button onClick={handleKeepAll} disabled={isExecuting} className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm rounded-lg flex items-center justify-center gap-2 transition-colors">
-            <CheckCircle className="w-4 h-4" />Keep All
+          <button
+            onClick={handleKeepAll}
+            disabled={isExecuting}
+            className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm rounded-lg flex items-center justify-center gap-2 transition-colors"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Keep All
           </button>
-          <button onClick={handleDeleteAll} disabled={isExecuting} className="flex-1 px-3 py-2 bg-red-900/50 hover:bg-red-900 text-red-300 text-sm rounded-lg flex items-center justify-center gap-2 border border-red-800 transition-colors">
-            <Trash2 className="w-4 h-4" />Delete All
+          <button
+            onClick={handleDeleteAll}
+            disabled={isExecuting}
+            className="flex-1 px-3 py-2 bg-red-900/50 hover:bg-red-900 text-red-300 text-sm rounded-lg flex items-center justify-center gap-2 border border-red-800 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete All
           </button>
         </div>
       </div>

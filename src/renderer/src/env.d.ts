@@ -93,7 +93,8 @@ interface AgentRule {
 }
 
 interface AgentConfig {
-  watchFolder: string
+  id: string
+  watchFolders: string[]
   rules: AgentRule[]
   enableActivityLog: boolean
   logPath: string
@@ -101,6 +102,7 @@ interface AgentConfig {
 
 interface ActivityEntry {
   id: string
+  watcherId: string
   timestamp: string
   originalName: string
   originalPath: string
@@ -116,8 +118,15 @@ interface ActivityEntry {
 interface WatcherStatus {
   running: boolean
   paused: boolean
-  watchFolder?: string
+  watchFolders?: string[]
   rulesCount?: number
+}
+
+interface WatcherStats {
+  filesProcessed: number
+  startTime: number
+  aiCalls: number
+  errors: number
 }
 
 // ============ API Interfaces ============
@@ -128,6 +137,16 @@ interface GoogleAPI {
   getUser: () => Promise<GoogleUser | null>
   signIn: () => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<{ success: boolean }>
+  createSheet: (data: {
+    title: string
+    headers: string[]
+    rows: (string | number)[][]
+    sheetName?: string
+  }) => Promise<{ success: boolean; spreadsheetUrl?: string; error?: string }>
+  searchGmail: (
+    query: string,
+    maxResults?: number
+  ) => Promise<{ success: boolean; emails?: unknown[]; error?: string }>
   onSignedIn: (callback: () => void) => () => void
   onSignedOut: (callback: () => void) => () => void
 }
@@ -154,18 +173,22 @@ interface FileSystemAPI {
 }
 
 interface AgentAPI {
+  init: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   isReady: () => Promise<boolean>
   test: () => Promise<{ success: boolean; error?: string }>
   chat: (
     messages: Array<{ role: string; content: string }>,
     grantedFolders: string[],
-    selectedFile?: string
+    selectedFile?: string,
+    isDirectory?: boolean
   ) => Promise<AgentResponse>
   getMetrics: () => Promise<SessionMetrics>
   resetMetrics: () => Promise<void>
   onStreamChunk: (callback: (chunk: string) => void) => () => void
   onStreamEnd: (callback: () => void) => () => void
-  onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => () => void
+  onToolCall: (
+    callback: (data: { name: string; args: Record<string, string> }) => void
+  ) => () => void
   onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
   onRoutingStart: (callback: () => void) => () => void
   onRoutingComplete: (callback: (classification: TaskClassification) => void) => () => void
@@ -174,33 +197,52 @@ interface AgentAPI {
 interface PendingAPI {
   getAll: () => Promise<PendingAction[]>
   getCount: () => Promise<number>
-  approve: (id: string) => Promise<OperationResult>
-  reject: (id: string) => Promise<OperationResult>
-  approveAll: () => Promise<OperationResult>
-  rejectAll: () => Promise<OperationResult>
+  getSize: () => Promise<number>
+  queueDeletion: (filePath: string, reason?: string) => Promise<PendingAction>
+  queueMultiple: (filePaths: string[], reason?: string) => Promise<PendingAction[]>
+  executeOne: (actionId: string) => Promise<ActionResult>
+  executeAll: () => Promise<ActionResult[]>
+  executeSelected: (actionIds: string[]) => Promise<ActionResult[]>
+  removeOne: (actionId: string) => Promise<boolean>
+  keepAll: () => Promise<number>
+  clear: () => Promise<void>
   onNewAction: (callback: (action: PendingAction) => void) => () => void
 }
 
 interface WatcherAPI {
-  start: (config: AgentConfig) => Promise<{ success: boolean; error?: string }>
-  stop: () => Promise<{ success: boolean }>
-  pause: () => Promise<{ success: boolean; paused: boolean }>
-  resume: () => Promise<{ success: boolean; paused: boolean }>
-  getStatus: () => Promise<WatcherStatus>
-  updateRules: (rules: AgentRule[]) => Promise<{ success: boolean }>
-  onReady: (callback: () => void) => () => void
-  onFileDetected: (callback: (data: { path: string; name: string }) => void) => () => void
-  onFileProcessed: (callback: (entry: ActivityEntry) => void) => () => void
-  onError: (callback: (error: string) => void) => () => void
+  start: (config: AgentConfig) => Promise<{ success: boolean; error?: string; watcherId?: string }>
+  stop: (watcherId: string) => Promise<{ success: boolean }>
+  stopAll: () => Promise<{ success: boolean; count: number }>
+  pause: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
+  resume: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
+  getStatus: (watcherId?: string) => Promise<WatcherStatus>
+  getAll: () => Promise<AgentConfig[]>
+  getStats: (watcherId: string) => Promise<WatcherStats | null>
+  updateRules: (watcherId: string, rules: AgentRule[]) => Promise<{ success: boolean }>
+  onReady: (callback: (watcherId: string) => void) => () => void
+  onFileDetected: (
+    callback: (watcherId: string, data: { path: string; name: string }) => void
+  ) => () => void
+  onFileProcessed: (callback: (watcherId: string, entry: ActivityEntry) => void) => () => void
+  onError: (callback: (watcherId: string, error: string) => void) => () => void
+  onAllStopped: (callback: () => void) => () => void
+}
+
+interface ConfigAPI {
+  getApiKeys: () => Promise<{ hasGeminiKey: boolean }>
+  saveApiKeys: (keys: { geminiKey: string }) => Promise<{ success: boolean; error?: string }>
 }
 
 interface ElectronAPI {
   selectFolder: () => Promise<string | null>
+  getVersion: () => Promise<string>
+  platform: string
   fs: FileSystemAPI
   agent: AgentAPI
   pending: PendingAPI
   google: GoogleAPI
   watcher: WatcherAPI
+  config: ConfigAPI
 }
 
 declare global {

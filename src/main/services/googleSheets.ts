@@ -29,9 +29,11 @@ export async function createGoogleSheet(options: CreateSheetOptions): Promise<Cr
     const createResponse = await sheets.spreadsheets.create({
       requestBody: {
         properties: { title },
-        sheets: [{
-          properties: { title: sheetName }
-        }]
+        sheets: [
+          {
+            properties: { title: sheetName }
+          }
+        ]
       }
     })
 
@@ -162,9 +164,9 @@ export async function createExpenseReportSheet(
 
     // Expenses sheet data
     const expenseHeaders = ['Date', 'Vendor', 'Category', 'Description', 'Amount']
-    const expenseRows = sorted.map(e => [e.date, e.vendor, e.category, e.description, e.amount])
+    const expenseRows = sorted.map((e) => [e.date, e.vendor, e.category, e.description, e.amount])
     const totalAmount = sorted.reduce((sum, e) => sum + e.amount, 0)
-    
+
     // Add total row
     expenseRows.push(['', '', '', 'TOTAL', totalAmount])
 
@@ -177,7 +179,7 @@ export async function createExpenseReportSheet(
 
     // Summary sheet - category totals
     const categoryTotals: Record<string, number> = {}
-    sorted.forEach(e => {
+    sorted.forEach((e) => {
       categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount
     })
 

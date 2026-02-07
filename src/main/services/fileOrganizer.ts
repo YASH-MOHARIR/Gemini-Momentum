@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises'
-import * as path from 'path' 
+import * as path from 'path'
 import * as pendingActions from './pendingActions'
 
 // File category definitions
@@ -8,7 +8,24 @@ export const FILE_CATEGORIES: Record<string, string[]> = {
   Documents: ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt', 'pages'],
   Spreadsheets: ['xlsx', 'xls', 'csv', 'numbers', 'ods'],
   Presentations: ['ppt', 'pptx', 'key', 'odp'],
-  Code: ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'h', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt'],
+  Code: [
+    'js',
+    'ts',
+    'jsx',
+    'tsx',
+    'py',
+    'java',
+    'cpp',
+    'c',
+    'h',
+    'cs',
+    'go',
+    'rs',
+    'rb',
+    'php',
+    'swift',
+    'kt'
+  ],
   Web: ['html', 'css', 'scss', 'sass', 'less', 'vue', 'svelte'],
   Data: ['json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'env', 'sql'],
   Archives: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'],
@@ -18,7 +35,7 @@ export const FILE_CATEGORIES: Record<string, string[]> = {
   Design: ['psd', 'ai', 'sketch', 'fig', 'xd', 'indd'],
   Ebooks: ['epub', 'mobi', 'azw', 'azw3'],
   Markdown: ['md', 'mdx', 'markdown'],
-  Executables: ['exe', 'msi', 'dmg', 'app', 'deb', 'rpm'],
+  Executables: ['exe', 'msi', 'dmg', 'app', 'deb', 'rpm']
 }
 
 // System/junk files that should be flagged for deletion
@@ -28,12 +45,12 @@ export const JUNK_PATTERNS = [
   'desktop.ini',
   '.Spotlight-V100',
   '.Trashes',
-  '~$*',  // Office temp files
+  '~$*', // Office temp files
   '*.tmp',
   '*.temp',
   '.fseventsd',
   '.DocumentRevisions-V100',
-  '.TemporaryItems',
+  '.TemporaryItems'
 ]
 
 export interface FileInfo {
@@ -76,13 +93,13 @@ export interface OrganizationResult {
  */
 export function detectCategory(filename: string): string {
   const ext = path.extname(filename).toLowerCase().slice(1)
-  
+
   for (const [category, extensions] of Object.entries(FILE_CATEGORIES)) {
     if (extensions.includes(ext)) {
       return category
     }
   }
-  
+
   return 'Other'
 }
 
@@ -91,7 +108,7 @@ export function detectCategory(filename: string): string {
  */
 export function isJunkFile(filename: string): boolean {
   const name = path.basename(filename)
-  
+
   for (const pattern of JUNK_PATTERNS) {
     if (pattern.includes('*')) {
       // Wildcard pattern
@@ -102,12 +119,12 @@ export function isJunkFile(filename: string): boolean {
       if (name === pattern) return true
     }
   }
-  
+
   // Check for hidden files (starting with .)
   if (name.startsWith('.') && name !== '.gitignore' && name !== '.env') {
     return true
   }
-  
+
   return false
 }
 
@@ -119,7 +136,7 @@ export async function createOrganizationPlan(
   options: { includeSubfolders?: boolean } = {}
 ): Promise<OrganizationPlan> {
   const { includeSubfolders = false } = options
-  
+
   const categories: Record<string, FileInfo[]> = {}
   const junkFiles: FileInfo[] = []
   const uncategorized: FileInfo[] = []
@@ -129,24 +146,24 @@ export async function createOrganizationPlan(
   async function scanDirectory(currentPath: string): Promise<void> {
     try {
       const entries = await fs.readdir(currentPath, { withFileTypes: true })
-      
+
       for (const entry of entries) {
         const fullPath = path.join(currentPath, entry.name)
-        
+
         if (entry.isDirectory()) {
           if (includeSubfolders) {
             await scanDirectory(fullPath)
           }
           continue
         }
-        
+
         totalFiles++
-        
+
         const stats = await fs.stat(fullPath)
         const ext = path.extname(entry.name).toLowerCase().slice(1)
         const category = detectCategory(entry.name)
         const isJunk = isJunkFile(entry.name)
-        
+
         const fileInfo: FileInfo = {
           name: entry.name,
           path: fullPath,
@@ -156,7 +173,7 @@ export async function createOrganizationPlan(
           category,
           isJunk
         }
-        
+
         if (isJunk) {
           junkFiles.push(fileInfo)
           actions.push({
@@ -171,11 +188,11 @@ export async function createOrganizationPlan(
             categories[category] = []
           }
           categories[category].push(fileInfo)
-          
+
           // Add move action
           const destFolder = path.join(dirPath, category)
           const destPath = path.join(destFolder, entry.name)
-          
+
           // Only add action if file isn't already in the right folder
           if (path.dirname(fullPath) !== destFolder) {
             actions.push({
@@ -192,9 +209,9 @@ export async function createOrganizationPlan(
       console.error(`[ORGANIZER] Error scanning ${currentPath}:`, error)
     }
   }
-  
+
   await scanDirectory(dirPath)
-  
+
   return {
     totalFiles,
     categories,
@@ -213,7 +230,7 @@ export async function executeOrganization(
   options: { deleteJunk?: boolean; dryRun?: boolean } = {}
 ): Promise<OrganizationResult> {
   const { deleteJunk = false, dryRun = false } = options
-  
+
   const result: OrganizationResult = {
     success: true,
     filesMoved: 0,
@@ -222,7 +239,7 @@ export async function executeOrganization(
     errors: [],
     summary: {}
   }
-  
+
   // Create category folders first
   const categoriesToCreate = new Set<string>()
   for (const action of plan.actions) {
@@ -230,7 +247,7 @@ export async function executeOrganization(
       categoriesToCreate.add(action.category)
     }
   }
-  
+
   for (const category of categoriesToCreate) {
     const folderPath = path.join(dirPath, category)
     try {
@@ -243,7 +260,7 @@ export async function executeOrganization(
       // Folder might already exist, which is fine
     }
   }
-  
+
   // Execute move actions
   for (const action of plan.actions) {
     if (action.type === 'move' && action.destinationPath) {
@@ -264,7 +281,8 @@ export async function executeOrganization(
           }
         }
         result.filesMoved++
-        result.summary[action.category || 'Other'] = (result.summary[action.category || 'Other'] || 0) + 1
+        result.summary[action.category || 'Other'] =
+          (result.summary[action.category || 'Other'] || 0) + 1
         console.log(`[ORGANIZER] Moved: ${action.fileName} → ${action.category}`)
       } catch (error) {
         result.errors.push(`Failed to move ${action.fileName}: ${error}`)
@@ -272,24 +290,22 @@ export async function executeOrganization(
       }
     }
   }
-  
+
   // Queue delete actions (junk files) for review instead of immediate deletion
   if (deleteJunk) {
-    const junkPaths = plan.actions
-      .filter(a => a.type === 'delete')
-      .map(a => a.sourcePath)
-    
+    const junkPaths = plan.actions.filter((a) => a.type === 'delete').map((a) => a.sourcePath)
+
     if (junkPaths.length > 0 && !dryRun) {
       await pendingActions.queueMultipleDeletions(junkPaths, 'Junk/system file')
       result.filesDeleted = junkPaths.length
       console.log(`[ORGANIZER] Queued ${junkPaths.length} junk files for review`)
     }
   }
-  
+
   if (result.errors.length > 0) {
     result.success = false
   }
-  
+
   return result
 }
 
@@ -298,12 +314,12 @@ export async function executeOrganization(
  */
 export function getPlanSummary(plan: OrganizationPlan): string {
   const lines: string[] = []
-  
+
   lines.push(`**Organization Plan**`)
   lines.push(``)
   lines.push(`Total files scanned: ${plan.totalFiles}`)
   lines.push(``)
-  
+
   if (Object.keys(plan.categories).length > 0) {
     lines.push(`**Files by Category:**`)
     for (const [category, files] of Object.entries(plan.categories)) {
@@ -311,12 +327,12 @@ export function getPlanSummary(plan: OrganizationPlan): string {
     }
     lines.push(``)
   }
-  
+
   if (plan.uncategorized.length > 0) {
     lines.push(`**Uncategorized:** ${plan.uncategorized.length} files`)
     lines.push(``)
   }
-  
+
   if (plan.junkFiles.length > 0) {
     lines.push(`**Junk/System Files:** ${plan.junkFiles.length} files`)
     for (const file of plan.junkFiles.slice(0, 5)) {
@@ -327,10 +343,10 @@ export function getPlanSummary(plan: OrganizationPlan): string {
     }
     lines.push(``)
   }
-  
-  const moveCount = plan.actions.filter(a => a.type === 'move').length
+
+  const moveCount = plan.actions.filter((a) => a.type === 'move').length
   lines.push(`**Actions to perform:** ${moveCount} files to move`)
-  
+
   return lines.join('\n')
 }
 
@@ -339,19 +355,19 @@ export function getPlanSummary(plan: OrganizationPlan): string {
  */
 export function getResultSummary(result: OrganizationResult): string {
   const lines: string[] = []
-  
+
   lines.push(`**Organization Complete**`)
   lines.push(``)
   lines.push(`• Files moved: ${result.filesMoved}`)
-  
+
   if (result.filesDeleted > 0) {
     lines.push(`• Junk files queued for review: ${result.filesDeleted}`)
   }
-  
+
   if (result.foldersCreated.length > 0) {
     lines.push(`• Folders created: ${result.foldersCreated.length}`)
   }
-  
+
   if (Object.keys(result.summary).length > 0) {
     lines.push(``)
     lines.push(`**Files by Category:**`)
@@ -359,12 +375,12 @@ export function getResultSummary(result: OrganizationResult): string {
       lines.push(`• ${category}: ${count}`)
     }
   }
-  
+
   if (result.filesDeleted > 0) {
     lines.push(``)
     lines.push(`⚠️ Check the **Review** tab to approve or keep the junk files.`)
   }
-  
+
   if (result.errors.length > 0) {
     lines.push(``)
     lines.push(`**Errors:** ${result.errors.length}`)
@@ -372,6 +388,6 @@ export function getResultSummary(result: OrganizationResult): string {
       lines.push(`• ${error}`)
     }
   }
-  
+
   return lines.join('\n')
 }

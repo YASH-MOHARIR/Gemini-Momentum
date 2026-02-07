@@ -9,6 +9,7 @@
 ## What You'll Get
 
 After setup, you can:
+
 - Search and download Gmail attachments
 - Create Google Sheets from processed data
 - Export expense reports automatically
@@ -98,6 +99,7 @@ After setup, you can:
 **IMPORTANT:** Keep this popup open!
 
 You'll see something like:
+
 ```
 Client ID: 123456789-abcdefg.apps.googleusercontent.com
 Client secret: GOCSPX-abc123def456
@@ -146,19 +148,23 @@ GOOGLE_CLIENT_SECRET=GOCSPX-abc123def456
 ## Troubleshooting
 
 ### "Google hasn't verified this app" warning
+
 - **This is normal!** You're using your own app, so verification isn't needed
 - Click **"Continue"** to proceed
 
 ### Can't find .env file
+
 - Make sure you're in the project root folder (where package.json is)
 - On Windows: Enable "Show hidden files" in File Explorer
 - On Mac: Press `Cmd + Shift + .` to show hidden files
 
 ### "Access blocked" error
+
 - Make sure you added yourself as a test user in Step 5
 - Go back to Step 5 and add your email address
 
 ### Still not working?
+
 - Double-check that you copied the ENTIRE Client ID and Client Secret
 - Make sure there are no extra spaces in the .env file
 - Restart Momentum after saving .env
@@ -177,8 +183,8 @@ GOOGLE_CLIENT_SECRET=GOCSPX-abc123def456
 ## Need Help?
 
 If you get stuck, check:
+
 1. Make sure all 3 APIs are enabled (Gmail, Sheets, Drive)
 2. Make sure you added yourself as a test user
 3. Make sure the .env file is saved in the correct location
 4. Try restarting Momentum
-

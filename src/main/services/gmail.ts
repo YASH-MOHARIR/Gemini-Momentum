@@ -21,7 +21,10 @@ interface SearchEmailsResult {
   error?: string
 }
 
-export async function searchEmails(query: string, maxResults: number = 20): Promise<SearchEmailsResult> {
+export async function searchEmails(
+  query: string,
+  maxResults: number = 20
+): Promise<SearchEmailsResult> {
   const auth = getAuthClient()
   if (!auth || !(await isSignedIn())) {
     return { success: false, emailsFound: 0, error: 'Not signed into Google' }
@@ -57,13 +60,13 @@ export async function searchEmails(query: string, maxResults: number = 20): Prom
         })
 
         const headers = detail.data.payload?.headers || []
-        const subject = headers.find(h => h.name === 'Subject')?.value || '(No Subject)'
-        const from = headers.find(h => h.name === 'From')?.value || 'Unknown'
-        const date = headers.find(h => h.name === 'Date')?.value || ''
+        const subject = headers.find((h) => h.name === 'Subject')?.value || '(No Subject)'
+        const from = headers.find((h) => h.name === 'From')?.value || 'Unknown'
+        const date = headers.find((h) => h.name === 'Date')?.value || ''
 
         // Check for attachments
         const parts = detail.data.payload?.parts || []
-        const attachments = parts.filter(p => p.filename && p.filename.length > 0)
+        const attachments = parts.filter((p) => p.filename && p.filename.length > 0)
 
         emails.push({
           id: msg.id!,
@@ -157,7 +160,7 @@ export async function searchAndDownloadReceipts(
 
         const parts = detail.data.payload?.parts || []
         const attachmentParts = parts.filter(
-          p => p.filename && p.filename.length > 0 && p.body?.attachmentId
+          (p) => p.filename && p.filename.length > 0 && p.body?.attachmentId
         )
 
         if (attachmentParts.length === 0) continue
@@ -165,8 +168,10 @@ export async function searchAndDownloadReceipts(
 
         // Get email date for naming
         const headers = detail.data.payload?.headers || []
-        const dateHeader = headers.find(h => h.name === 'Date')?.value || ''
-        const emailDate = dateHeader ? new Date(dateHeader).toISOString().split('T')[0] : 'unknown-date'
+        const dateHeader = headers.find((h) => h.name === 'Date')?.value || ''
+        const emailDate = dateHeader
+          ? new Date(dateHeader).toISOString().split('T')[0]
+          : 'unknown-date'
 
         for (const part of attachmentParts) {
           const filename = part.filename!

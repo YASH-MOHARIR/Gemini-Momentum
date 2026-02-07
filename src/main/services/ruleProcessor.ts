@@ -52,7 +52,7 @@ export async function processFileWithRules(
 
   const fileName = path.basename(filePath)
   const extension = path.extname(filePath).slice(1).toLowerCase()
-  
+
   let fileSize = 0
   try {
     const stats = await fs.stat(filePath)
@@ -65,9 +65,9 @@ export async function processFileWithRules(
 
   // Check if this might need vision (image file)
   const isImage = isImageFile(filePath)
-  
+
   // Improved auto-detection: catch more user intent
-  const rulesNeedVision = rules.some(r => {
+  const rulesNeedVision = rules.some((r) => {
     const text = r.text.toLowerCase()
     return (
       // Direct image types
@@ -122,7 +122,7 @@ async function classifyWithText(
   rules: AgentRule[]
 ): Promise<RuleMatch> {
   const rulesText = rules
-    .filter(r => r.enabled)
+    .filter((r) => r.enabled)
     .map((r, i) => `${i + 1}. ${r.text}`)
     .join('\n')
 
@@ -162,7 +162,7 @@ RESPOND WITH JSON ONLY (no markdown, no explanation):
 
   const model = client!.getGenerativeModel({
     model: 'gemini-2.0-flash-exp',
-    generationConfig: { 
+    generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 500
     }
@@ -176,10 +176,7 @@ RESPOND WITH JSON ONLY (no markdown, no explanation):
 
 // ============ Vision-Based Classification ============
 
-async function classifyWithVision(
-  filePath: string,
-  rules: AgentRule[]
-): Promise<RuleMatch> {
+async function classifyWithVision(filePath: string, rules: AgentRule[]): Promise<RuleMatch> {
   // Read image file
   const imageBuffer = await fs.readFile(filePath)
   const base64 = imageBuffer.toString('base64')
@@ -191,7 +188,7 @@ async function classifyWithVision(
 
   // Now match against rules with this knowledge
   const rulesText = rules
-    .filter(r => r.enabled)
+    .filter((r) => r.enabled)
     .map((r, i) => `${i + 1}. ${r.text}`)
     .join('\n')
 
@@ -231,7 +228,7 @@ RESPOND WITH JSON ONLY (no markdown):
 
   const model = client!.getGenerativeModel({
     model: 'gemini-2.0-flash-exp',
-    generationConfig: { 
+    generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 500
     }
@@ -249,7 +246,11 @@ RESPOND WITH JSON ONLY (no markdown):
       ruleResult.rename = rename
       console.log(`[RULE PROCESSOR] Generated receipt rename: ${rename}`)
     }
-  } else if (analysis.imageType === 'screenshot' && ruleResult.action === 'move' && analysis.description) {
+  } else if (
+    analysis.imageType === 'screenshot' &&
+    ruleResult.action === 'move' &&
+    analysis.description
+  ) {
     const rename = generateScreenshotFilename(analysis, extension)
     if (rename) {
       ruleResult.rename = rename
@@ -278,7 +279,7 @@ RESPOND WITH JSON ONLY:
 
   const model = client!.getGenerativeModel({
     model: 'gemini-2.0-flash-exp',
-    generationConfig: { 
+    generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 300
     }
@@ -290,7 +291,7 @@ RESPOND WITH JSON ONLY:
   ])
 
   const responseText = result.response.text()
-  
+
   try {
     const jsonMatch = responseText.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
@@ -335,7 +336,8 @@ function generateReceiptFilename(analysis: ImageAnalysis, extension: string): st
     parts.push(formattedAmount)
   }
 
-  if (parts.length > 1) { // Need at least date + something else
+  if (parts.length > 1) {
+    // Need at least date + something else
     return parts.join('_') + extension
   }
 
@@ -346,7 +348,7 @@ function generateScreenshotFilename(analysis: ImageAnalysis, extension: string):
   if (!analysis.description) return null
 
   const date = new Date().toISOString().split('T')[0]
-  
+
   // Clean description for filename
   const cleanDesc = analysis.description
     .replace(/[^a-zA-Z0-9\s-]/g, '')
@@ -386,7 +388,7 @@ function parseRuleResponse(responseText: string, usedVision: boolean): RuleMatch
   } catch (error) {
     console.error('[RULE PROCESSOR] Failed to parse response:', error)
     console.error('[RULE PROCESSOR] Raw response:', responseText)
-    
+
     return {
       matchedRule: null,
       action: 'skip',

@@ -1,26 +1,32 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* ============ CSS Variables ============ */
 :root {
   /* Normal Mode Colors */
-  --accent-primary: 14 165 233;      /* sky-500 */
-  --accent-dark: 2 132 199;          /* sky-600 */
-  --accent-light: 56 189 248;        /* sky-400 */
-  --header-bg: 30 41 59;             /* slate-800 */
+  --accent-primary: 14 165 233; /* sky-500 */
+  --accent-dark: 2 132 199; /* sky-600 */
+  --accent-light: 56 189 248; /* sky-400 */
+  --header-bg: 30 41 59; /* slate-800 */
   --mode-indicator: var(--accent-primary);
 }
 
 /* Agent Mode Colors */
 .agent-mode {
-  --accent-primary: 16 185 129;      /* emerald-500 */
-  --accent-dark: 5 150 105;          /* emerald-600 */
-  --accent-light: 52 211 153;        /* emerald-400 */
+  --accent-primary: 16 185 129; /* emerald-500 */
+  --accent-dark: 5 150 105; /* emerald-600 */
+  --accent-light: 52 211 153; /* emerald-400 */
   --mode-indicator: 16 185 129;
 }
 
 /* ============ Base Styles ============ */
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -30,10 +36,11 @@ body {
 .theme-transition *,
 .theme-transition *::before,
 .theme-transition *::after {
-  transition: background-color 0.4s ease, 
-              border-color 0.4s ease, 
-              color 0.3s ease,
-              box-shadow 0.3s ease !important;
+  transition:
+    background-color 0.4s ease,
+    border-color 0.4s ease,
+    color 0.3s ease,
+    box-shadow 0.3s ease !important;
 }
 
 /* ============ Agent Mode Visual Changes ============ */
@@ -41,27 +48,31 @@ body {
 /* Subtle background gradient in agent mode */
 .agent-mode .agent-bg {
   background: linear-gradient(
-    135deg, 
-    rgb(15 23 42) 0%,           /* slate-900 */
-    rgb(6 78 59 / 0.15) 100%    /* emerald tint */
+    135deg,
+    rgb(15 23 42) 0%,
+    /* slate-900 */ rgb(6 78 59 / 0.15) 100% /* emerald tint */
   );
 }
 
 /* Pulsing glow effect for active indicator */
 .agent-mode .agent-active-glow {
-  box-shadow: 0 0 20px rgb(16 185 129 / 0.3),
-              0 0 40px rgb(16 185 129 / 0.1);
+  box-shadow:
+    0 0 20px rgb(16 185 129 / 0.3),
+    0 0 40px rgb(16 185 129 / 0.1);
   animation: agent-pulse 2s ease-in-out infinite;
 }
 
 @keyframes agent-pulse {
-  0%, 100% {
-    box-shadow: 0 0 20px rgb(16 185 129 / 0.3),
-                0 0 40px rgb(16 185 129 / 0.1);
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px rgb(16 185 129 / 0.3),
+      0 0 40px rgb(16 185 129 / 0.1);
   }
   50% {
-    box-shadow: 0 0 30px rgb(16 185 129 / 0.5),
-                0 0 60px rgb(16 185 129 / 0.2);
+    box-shadow:
+      0 0 30px rgb(16 185 129 / 0.5),
+      0 0 60px rgb(16 185 129 / 0.2);
   }
 }
 
@@ -76,8 +87,15 @@ body {
 }
 
 @keyframes dot-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.2); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
 }
 
 /* ============ Agent Panel Styles ============ */
@@ -85,19 +103,21 @@ body {
 .agent-panel {
   background: linear-gradient(
     180deg,
-    rgb(30 41 59) 0%,           /* slate-800 */
-    rgb(6 78 59 / 0.1) 100%     /* emerald tint */
+    rgb(30 41 59) 0%,
+    /* slate-800 */ rgb(6 78 59 / 0.1) 100% /* emerald tint */
   );
 }
 
 .agent-rule-input {
-  background: rgb(15 23 42);    /* slate-900 */
-  border: 1px solid rgb(51 65 85);  /* slate-700 */
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: rgb(15 23 42); /* slate-900 */
+  border: 1px solid rgb(51 65 85); /* slate-700 */
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .agent-rule-input:focus {
-  border-color: rgb(16 185 129);  /* emerald-500 */
+  border-color: rgb(16 185 129); /* emerald-500 */
   box-shadow: 0 0 0 2px rgb(16 185 129 / 0.2);
   outline: none;
 }
@@ -105,15 +125,17 @@ body {
 /* Activity feed item */
 .activity-item {
   border-left: 3px solid transparent;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .activity-item.success {
-  border-left-color: rgb(16 185 129);  /* emerald-500 */
+  border-left-color: rgb(16 185 129); /* emerald-500 */
 }
 
 .activity-item.error {
-  border-left-color: rgb(239 68 68);   /* red-500 */
+  border-left-color: rgb(239 68 68); /* red-500 */
 }
 
 .activity-item.skipped {
@@ -121,7 +143,7 @@ body {
 }
 
 .activity-item:hover {
-  background: rgb(51 65 85 / 0.3);     /* slate-700 with alpha */
+  background: rgb(51 65 85 / 0.3); /* slate-700 with alpha */
 }
 
 /* ============ Custom Scrollbar ============ */
@@ -145,7 +167,7 @@ body {
 
 /* Agent mode scrollbar accent */
 .agent-mode ::-webkit-scrollbar-thumb {
-  background: rgb(5 150 105 / 0.6);  /* emerald-600 */
+  background: rgb(5 150 105 / 0.6); /* emerald-600 */
 }
 
 .agent-mode ::-webkit-scrollbar-thumb:hover {
@@ -199,7 +221,8 @@ body {
 
 /* Delete - Red pulse */
 @keyframes highlight-delete {
-  0%, 100% {
+  0%,
+  100% {
     background-color: rgba(239, 68, 68, 0.3);
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
   }
@@ -215,7 +238,8 @@ body {
 
 /* New file - Green pulse */
 @keyframes highlight-new {
-  0%, 100% {
+  0%,
+  100% {
     background-color: rgba(16, 185, 129, 0.3);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
   }
@@ -231,7 +255,8 @@ body {
 
 /* Update - Blue pulse */
 @keyframes highlight-update {
-  0%, 100% {
+  0%,
+  100% {
     background-color: rgba(59, 130, 246, 0.3);
     box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
   }

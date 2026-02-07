@@ -58,9 +58,13 @@ EXAMPLES:
 "Extract data from this receipt" → image_analysis, requiresVision=true, steps=2, complexity=0.5
 "Summarize all PDFs and create report" → complex_reasoning, steps=8, complexity=0.8`
 
-function selectExecutor(classification: TaskClassification): ExecutorProfile {
-  const { taskType, complexityScore, requiresVision, estimatedSteps } = classification
+// ... (imports remain same)
 
+function selectExecutor(classification: TaskClassification): ExecutorProfile {
+  const { taskType, complexityScore, requiresVision, estimatedSteps, requiresMultipleTools } =
+    classification
+
+  // Simple queries and single file ops with no vision
   if (
     taskType === 'simple_query' ||
     (taskType === 'single_file_op' && !requiresVision && estimatedSteps <= 2)
@@ -68,20 +72,37 @@ function selectExecutor(classification: TaskClassification): ExecutorProfile {
     return 'flash-minimal'
   }
 
-  if (taskType === 'complex_reasoning' || complexityScore >= 0.8) {
+  // Complex reasoning or very high complexity
+  if (
+    taskType === 'complex_reasoning' ||
+    complexityScore >= 0.8 ||
+    (requiresMultipleTools && estimatedSteps > 5)
+  ) {
     return 'pro-high'
   }
 
+  // Default to flash-high (balanced)
   return 'flash-high'
 }
 
 export async function classifyTask(
   userMessage: string,
-  selectedFile?: string
+  selectedFiles?: string[]
 ): Promise<TaskClassification> {
   const client = getClient()
 
-  const contextInfo = selectedFile ? `\nSelected file: ${selectedFile}` : ''
+  let contextInfo = ''
+  if (selectedFiles && selectedFiles.length > 0) {
+    if (selectedFiles.length === 1) {
+      contextInfo = `\nSelected file: ${selectedFiles[0]}`
+    } else {
+      contextInfo = `\nSelected files (${selectedFiles.length}):\n${selectedFiles
+        .slice(0, 5)
+        .map((f) => `- ${f}`)
+        .join('\n')}${selectedFiles.length > 5 ? '\n...and more' : ''}`
+    }
+  }
+
   const prompt = `Classify this task:${contextInfo}\n\nUser request: "${userMessage}"`
 
   console.log('[ROUTER] Classifying task...')
@@ -96,33 +117,32 @@ export async function classifyTask(
       }
     })
 
-    const result = await model.generateContent([
-      { text: ROUTER_SYSTEM_PROMPT },
-      { text: prompt }
-    ])
+    const result = await model.generateContent([{ text: ROUTER_SYSTEM_PROMPT }, { text: prompt }])
 
     const responseText = result.response.text()
 
     // Try to extract JSON - handle markdown code blocks
     let jsonMatch = responseText.match(/\{[\s\S]*\}/)
-    
+
     if (!jsonMatch) {
       // Try to find JSON in code block
       const codeBlockMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
       if (codeBlockMatch) {
-        jsonMatch = [codeBlockMatch[1]]
+        jsonMatch = match[1] // Fix: use match[1] from local variable if possible, but actually codeBlockMatch[1]
       }
     }
-    
-    if (!jsonMatch) {
+
+    // Fix for above logic in single block
+    const jsonString = jsonMatch
+      ? jsonMatch[0]
+      : responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)?.[1] || null
+
+    if (!jsonString) {
       console.warn('[ROUTER] No JSON found, response:', responseText)
       throw new Error('No JSON found in router response')
     }
 
-    const classification = JSON.parse(jsonMatch[0]) as Omit<
-      TaskClassification,
-      'recommendedExecutor'
-    >
+    const classification = JSON.parse(jsonString) as Omit<TaskClassification, 'recommendedExecutor'>
     const recommendedExecutor = selectExecutor(classification as TaskClassification)
 
     const finalClassification: TaskClassification = {

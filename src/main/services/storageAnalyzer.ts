@@ -41,15 +41,21 @@ interface CategoryConfig {
 }
 
 const FILE_CATEGORIES: Record<string, CategoryConfig> = {
-  'Videos': { extensions: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v'], color: '#ef4444' },
-  'Images': { extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'bmp', 'ico'], color: '#8b5cf6' },
-  'Archives': { extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'], color: '#f59e0b' },
-  'Documents': { extensions: ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'], color: '#3b82f6' },
-  'Spreadsheets': { extensions: ['xlsx', 'xls', 'csv', 'ods'], color: '#10b981' },
-  'Audio': { extensions: ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'wma'], color: '#ec4899' },
-  'Code': { extensions: ['js', 'ts', 'py', 'java', 'cpp', 'c', 'html', 'css', 'json', 'xml', 'jsx', 'tsx'], color: '#06b6d4' },
-  'Executables': { extensions: ['exe', 'msi', 'dmg', 'pkg', 'deb', 'rpm', 'app'], color: '#84cc16' },
-  'Other': { extensions: [], color: '#6b7280' }
+  Videos: { extensions: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v'], color: '#ef4444' },
+  Images: {
+    extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'bmp', 'ico'],
+    color: '#8b5cf6'
+  },
+  Archives: { extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'], color: '#f59e0b' },
+  Documents: { extensions: ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'], color: '#3b82f6' },
+  Spreadsheets: { extensions: ['xlsx', 'xls', 'csv', 'ods'], color: '#10b981' },
+  Audio: { extensions: ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'wma'], color: '#ec4899' },
+  Code: {
+    extensions: ['js', 'ts', 'py', 'java', 'cpp', 'c', 'html', 'css', 'json', 'xml', 'jsx', 'tsx'],
+    color: '#06b6d4'
+  },
+  Executables: { extensions: ['exe', 'msi', 'dmg', 'pkg', 'deb', 'rpm', 'app'], color: '#84cc16' },
+  Other: { extensions: [], color: '#6b7280' }
 }
 
 const OLD_FILE_THRESHOLD_DAYS = 180 // 6 months
@@ -59,13 +65,13 @@ const LARGE_FILE_THRESHOLD_MB = 100
 
 function getCategoryForExtension(ext: string): string {
   ext = ext.toLowerCase().replace('.', '')
-  
+
   for (const [category, config] of Object.entries(FILE_CATEGORIES)) {
     if (config.extensions.includes(ext)) {
       return category
     }
   }
-  
+
   return 'Other'
 }
 
@@ -173,13 +179,11 @@ export async function analyzeStorage(
     .sort((a, b) => b.size - a.size)
 
   // Find largest files (top 20)
-  const largestFiles = files
-    .sort((a, b) => b.size - a.size)
-    .slice(0, 20)
+  const largestFiles = files.sort((a, b) => b.size - a.size).slice(0, 20)
 
   // Find old files (older than threshold)
   const oldFiles = files
-    .filter(f => f.age > OLD_FILE_THRESHOLD_DAYS)
+    .filter((f) => f.age > OLD_FILE_THRESHOLD_DAYS)
     .sort((a, b) => b.size - a.size)
     .slice(0, 20)
 
@@ -188,11 +192,12 @@ export async function analyzeStorage(
   // Generate suggestions
   const suggestions: string[] = []
 
-  if (oldFilesSize > 100 * 1024 * 1024) { // > 100MB
+  if (oldFilesSize > 100 * 1024 * 1024) {
+    // > 100MB
     suggestions.push(`${formatBytes(oldFilesSize)} in files older than 6 months`)
   }
 
-  const largeFiles = files.filter(f => f.size > LARGE_FILE_THRESHOLD_MB * 1024 * 1024)
+  const largeFiles = files.filter((f) => f.size > LARGE_FILE_THRESHOLD_MB * 1024 * 1024)
   if (largeFiles.length > 5) {
     suggestions.push(`${largeFiles.length} files larger than ${LARGE_FILE_THRESHOLD_MB}MB`)
   }

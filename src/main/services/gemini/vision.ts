@@ -72,7 +72,10 @@ interface ReceiptData {
   filePath: string
 }
 
-export async function extractReceiptData(imagePath: string, categoryHint?: string): Promise<ReceiptData | null> {
+export async function extractReceiptData(
+  imagePath: string,
+  categoryHint?: string
+): Promise<ReceiptData | null> {
   const client = getClient()
 
   try {
@@ -80,7 +83,7 @@ export async function extractReceiptData(imagePath: string, categoryHint?: strin
     const base64Image = imageBuffer.toString('base64')
     const mimeType = getMimeType(imagePath)
 
-    const model = client.getGenerativeModel({ 
+    const model = client.getGenerativeModel({
       model: MODELS.FLASH,
       generationConfig: {
         temperature: 0.1
@@ -115,7 +118,9 @@ Return ONLY the JSON object, no other text.`
     ])
 
     const responseText = result.response.text()
-    console.log(`[RECEIPT] Raw response for ${path.basename(imagePath)}: ${responseText.substring(0, 200)}`)
+    console.log(
+      `[RECEIPT] Raw response for ${path.basename(imagePath)}: ${responseText.substring(0, 200)}`
+    )
 
     // Parse JSON from response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/)
@@ -125,7 +130,7 @@ Return ONLY the JSON object, no other text.`
     }
 
     const data = JSON.parse(jsonMatch[0])
-    
+
     return {
       vendor: data.vendor || 'Unknown',
       date: data.date || new Date().toISOString().split('T')[0],
@@ -144,15 +149,21 @@ export async function processReceiptsBatch(
   folderPath: string,
   outputPath: string,
   categoryHint?: string
-): Promise<{ success: boolean; receiptsProcessed: number; outputPath?: string; summary?: string; error?: string }> {
+): Promise<{
+  success: boolean
+  receiptsProcessed: number
+  outputPath?: string
+  summary?: string
+  error?: string
+}> {
   console.log(`[RECEIPTS] Processing folder: ${folderPath}`)
 
   try {
     // Find all image files in folder
     const entries = await fs.readdir(folderPath, { withFileTypes: true })
     const imageFiles = entries
-      .filter(e => !e.isDirectory() && isImageFile(e.name))
-      .map(e => path.join(folderPath, e.name))
+      .filter((e) => !e.isDirectory() && isImageFile(e.name))
+      .map((e) => path.join(folderPath, e.name))
 
     if (imageFiles.length === 0) {
       return { success: false, receiptsProcessed: 0, error: 'No image files found in folder' }
@@ -169,15 +180,19 @@ export async function processReceiptsBatch(
         receipts.push(data)
       }
       // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
 
     if (receipts.length === 0) {
-      return { success: false, receiptsProcessed: 0, error: 'Could not extract data from any images' }
+      return {
+        success: false,
+        receiptsProcessed: 0,
+        error: 'Could not extract data from any images'
+      }
     }
 
     // Create expense report
-    const expenses = receipts.map(r => ({
+    const expenses = receipts.map((r) => ({
       vendor: r.vendor,
       date: r.date,
       category: r.category,
@@ -194,7 +209,7 @@ export async function processReceiptsBatch(
     // Generate summary
     const totalAmount = receipts.reduce((sum, r) => sum + r.amount, 0)
     const categoryTotals: Record<string, number> = {}
-    receipts.forEach(r => {
+    receipts.forEach((r) => {
       categoryTotals[r.category] = (categoryTotals[r.category] || 0) + r.amount
     })
 
@@ -217,7 +232,6 @@ export async function processReceiptsBatch(
       outputPath,
       summary: summaryLines.join('\n')
     }
-
   } catch (error) {
     console.error('[RECEIPTS] Error:', error)
     return { success: false, receiptsProcessed: 0, error: String(error) }
@@ -233,7 +247,7 @@ async function generateImageName(imagePath: string, style?: string): Promise<str
   const base64Image = imageBuffer.toString('base64')
   const mimeType = getMimeType(imagePath)
 
-  const model = client.getGenerativeModel({ 
+  const model = client.getGenerativeModel({
     model: MODELS.FLASH,
     generationConfig: { temperature: 0.1 }
   })
@@ -274,7 +288,7 @@ async function generateDocumentName(filePath: string, _style?: string): Promise<
   try {
     // Read file content
     const content = await fileSystem.readFile(filePath)
-    
+
     if (!content || content.length < 10) {
       // Fall back to date-based naming
       const date = new Date().toISOString().split('T')[0]
@@ -283,7 +297,7 @@ async function generateDocumentName(filePath: string, _style?: string): Promise<
     }
 
     const client = getClient()
-    const model = client.getGenerativeModel({ 
+    const model = client.getGenerativeModel({
       model: MODELS.FLASH,
       generationConfig: { temperature: 0.1 }
     })
@@ -303,10 +317,9 @@ Return ONLY the filename, nothing else.`
 
     const result = await model.generateContent(prompt)
     const suggestedName = result.response.text().trim()
-    
+
     console.log(`[RENAME] Document name suggested: ${suggestedName}`)
     return suggestedName
-
   } catch (error) {
     console.error('[RENAME] Failed to generate document name:', error)
     // Fall back to date-based naming
@@ -319,7 +332,13 @@ Return ONLY the filename, nothing else.`
 export async function smartRenameFile(
   filePath: string,
   namingStyle?: string
-): Promise<{ success: boolean; oldName: string; newName: string; newPath?: string; error?: string }> {
+): Promise<{
+  success: boolean
+  oldName: string
+  newName: string
+  newPath?: string
+  error?: string
+}> {
   const oldName = path.basename(filePath)
   const ext = path.extname(filePath).toLowerCase()
   const dir = path.dirname(filePath)
@@ -339,11 +358,11 @@ export async function smartRenameFile(
 
     // Clean the name
     newBaseName = newBaseName
-      .replace(/[<>:"/\\|?*]/g, '_')  // Remove invalid chars
-      .replace(/\s+/g, '_')            // Replace spaces with underscores
-      .replace(/_+/g, '_')             // Remove duplicate underscores
-      .replace(/^_|_$/g, '')           // Trim underscores
-      .substring(0, 100)               // Limit length
+      .replace(/[<>:"/\\|?*]/g, '_') // Remove invalid chars
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .replace(/_+/g, '_') // Remove duplicate underscores
+      .replace(/^_|_$/g, '') // Trim underscores
+      .substring(0, 100) // Limit length
 
     const newName = `${newBaseName}${ext}`
     const newPath = path.join(dir, newName)
@@ -366,7 +385,6 @@ export async function smartRenameFile(
       await fs.rename(filePath, newPath)
       return { success: true, oldName, newName, newPath }
     }
-
   } catch (error) {
     console.error('[RENAME] Error:', error)
     return { success: false, oldName, newName: oldName, error: String(error) }
@@ -375,7 +393,14 @@ export async function smartRenameFile(
 
 // ============ IMAGE CATEGORIZATION ============
 
-type ImageCategory = 'Receipts' | 'Screenshots' | 'Photos' | 'Documents' | 'Memes' | 'Artwork' | 'Other'
+type ImageCategory =
+  | 'Receipts'
+  | 'Screenshots'
+  | 'Photos'
+  | 'Documents'
+  | 'Memes'
+  | 'Artwork'
+  | 'Other'
 
 interface ImageCategorization {
   filePath: string
@@ -433,7 +458,7 @@ Return ONLY the JSON, nothing else.`
 
     const responseText = result.response.text()
     const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-    
+
     if (!jsonMatch) {
       console.error(`[CATEGORIZE] No JSON found for ${path.basename(imagePath)}`)
       return null
@@ -465,8 +490,8 @@ export async function categorizeImages(
     // Find all image files
     const entries = await fs.readdir(folderPath, { withFileTypes: true })
     const imageFiles = entries
-      .filter(e => !e.isDirectory() && isImageFile(e.name))
-      .map(e => path.join(folderPath, e.name))
+      .filter((e) => !e.isDirectory() && isImageFile(e.name))
+      .map((e) => path.join(folderPath, e.name))
 
     if (imageFiles.length === 0) {
       return {
@@ -497,9 +522,9 @@ export async function categorizeImages(
 
     for (const imagePath of imageFiles) {
       console.log(`[CATEGORIZE] Processing: ${path.basename(imagePath)}`)
-      
+
       const result = await categorizeImage(imagePath)
-      
+
       if (result) {
         plan[result.category].push(result)
         categorized++
@@ -515,7 +540,7 @@ export async function categorizeImages(
       }
 
       // Rate limit protection
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise((resolve) => setTimeout(resolve, 300))
     }
 
     // Generate summary
@@ -528,7 +553,7 @@ export async function categorizeImages(
     ]
 
     const nonEmptyCategories = Object.entries(plan).filter(([_, images]) => images.length > 0)
-    
+
     if (nonEmptyCategories.length > 0) {
       summaryLines.push(`**By Category:**`)
       for (const [category, images] of nonEmptyCategories) {
@@ -540,12 +565,12 @@ export async function categorizeImages(
     let moved = 0
     if (execute) {
       summaryLines.push(``, `**Moving files...**`)
-      
+
       for (const [category, images] of Object.entries(plan)) {
         if (images.length === 0) continue
 
         const categoryFolder = path.join(folderPath, category)
-        
+
         // Create category folder
         try {
           await fs.mkdir(categoryFolder, { recursive: true })
@@ -557,7 +582,7 @@ export async function categorizeImages(
         for (const img of images) {
           try {
             const destPath = path.join(categoryFolder, img.fileName)
-            
+
             // Check if destination exists
             try {
               await fs.access(destPath)
@@ -569,7 +594,7 @@ export async function categorizeImages(
             } catch {
               await fs.rename(img.filePath, destPath)
             }
-            
+
             moved++
           } catch (error) {
             console.error(`[CATEGORIZE] Failed to move ${img.fileName}:`, error)
@@ -591,7 +616,6 @@ export async function categorizeImages(
       moved: execute ? moved : undefined,
       summary: summaryLines.join('\n')
     }
-
   } catch (error) {
     console.error('[CATEGORIZE] Error:', error)
     return {

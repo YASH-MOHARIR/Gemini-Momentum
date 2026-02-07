@@ -7,9 +7,11 @@
 ---
 
 ## 1. ✅ Fixed electron-store Compatibility Issue
+
 **Problem:** electron-store v11 had ESM/CJS compatibility issues causing "Store is not a constructor" error
 
 **Solution:**
+
 - Downgraded electron-store from v11.0.2 to v8.2.0
 - Updated import syntax to work with CommonJS
 - **Files Modified:** `package.json`, `src/main/index.ts`
@@ -17,9 +19,11 @@
 ---
 
 ## 2. 🔄 Rebranded "AI Agents" to "Orbits"
+
 **Description:** Complete rebranding of the agent/watcher feature to "Orbits" for better branding and clarity
 
 **Changes:**
+
 - Renamed "AI Agents" → "Orbits" throughout the UI
 - Renamed "watchers" → "Orbits" in user-facing text
 - Changed Bot icon to Orbit icon (🛸) in tab and headers
@@ -27,6 +31,7 @@
 - Added descriptive text explaining what Orbits are
 
 **Files Modified:**
+
 - `src/renderer/src/components/AgentWorkspace.tsx`
 - `src/renderer/src/components/AgentModeToggle.tsx`
 - `src/renderer/src/App.tsx`
@@ -34,6 +39,7 @@
 - Created `ORBIT_REBRANDING.md` documentation
 
 **User-Facing Changes:**
+
 - Tab: "Agent" → "Orbits" with Orbit icon
 - Mode toggle: "Agent Mode" → "Orbit Mode"
 - Header: "AI Agents" → "Orbits"
@@ -43,9 +49,11 @@
 ---
 
 ## 3. 🔐 Improved Google Integration Setup
+
 **Problem:** Users had to manually edit .env files, which was confusing and error-prone
 
 **Solution:**
+
 - Removed "Google N/A" - now always shows "Connect Google" button
 - Added in-app credentials input form (no .env editing needed)
 - Created step-by-step setup modal with direct links to Google Cloud Console
@@ -53,10 +61,12 @@
 - Added detailed setup guides: `GOOGLE_SETUP_GUIDE.md` and `QUICK_GOOGLE_SETUP.md`
 
 **Files Modified:**
+
 - `src/renderer/src/components/GoogleSignIn.tsx`
 - `src/main/index.ts` (fixed config handler to accept partial updates)
 
 **User Flow:**
+
 1. Click "Connect Google"
 2. Follow 5-step guide with direct links
 3. Paste credentials directly in app
@@ -66,9 +76,11 @@
 ---
 
 ## 4. 🎨 Redesigned Orbit Creation UI (2-Column Layout)
+
 **Description:** Completely reorganized the Orbit editing interface for better UX
 
 **New Layout:**
+
 - **Left Column (30%):**
   - Folder selector with visual icon display
   - "Click Folder in Sidebar" button
@@ -82,20 +94,24 @@
   - Quick examples in separate box
 
 **Improvements:**
+
 - More organized and visual
 - Better use of space
 - Clearer separation of concerns
 - Enhanced descriptions for activity log
 
 **Files Modified:**
+
 - `src/renderer/src/components/AgentWorkspace.tsx`
 
 ---
 
 ## 5. ✏️ Editable Orbit Names
+
 **Description:** Users can now give custom names to their Orbits
 
 **Features:**
+
 - Click on Orbit name in header to edit inline
 - Pencil icon appears on hover
 - Press Enter to save, Escape to cancel
@@ -104,10 +120,12 @@
 - Name stored in Orbit configuration
 
 **Files Modified:**
+
 - `src/renderer/src/stores/agentStore.ts` (added `name` field to AgentConfig)
 - `src/renderer/src/components/AgentWorkspace.tsx`
 
 **User Experience:**
+
 - Click name or pencil icon to edit
 - Type custom name (e.g., "Downloads Cleaner", "Receipt Processor")
 - Name displays in header and card
@@ -115,14 +133,17 @@
 ---
 
 ## 6. 🐛 Fixed Folder Selection for Orbits
+
 **Problem:** "Click Folder in Sidebar" button wasn't working
 
 **Solution:**
+
 - Fixed `startFolderSelect` call to include all required parameters
 - Added missing `field` parameter ('watch')
 - Folder selection now properly highlights folders and sets watch folder
 
 **Files Modified:**
+
 - `src/renderer/src/components/AgentWorkspace.tsx`
 
 ---
@@ -130,12 +151,14 @@
 ## 📊 Technical Improvements
 
 ### Code Quality:
+
 - Better error handling for partial config updates
 - Improved state management for Orbit names
 - Enhanced visual feedback for user interactions
 - More descriptive tooltips and help text
 
 ### User Experience:
+
 - Clearer onboarding for Google integration
 - More intuitive Orbit creation flow
 - Better visual hierarchy in UI
@@ -155,6 +178,7 @@
 ## 🎯 Next Steps (Planned)
 
 ### Multi-Select Feature (Next Implementation):
+
 - Select multiple files/folders with Ctrl+Click
 - Visual selection indicators
 - Batch operations (delete, move, copy)
@@ -167,19 +191,23 @@
 ## 🔧 Files Modified Summary
 
 ### Main Process:
+
 - `src/main/index.ts` - Config handler, tray messages, Orbit terminology
 - `package.json` - Downgraded electron-store
 
 ### Renderer Components:
+
 - `src/renderer/src/App.tsx` - Tab icon and name
 - `src/renderer/src/components/AgentWorkspace.tsx` - Major UI redesign, editable names
 - `src/renderer/src/components/AgentModeToggle.tsx` - Mode toggle text
 - `src/renderer/src/components/GoogleSignIn.tsx` - Complete setup flow redesign
 
 ### State Management:
+
 - `src/renderer/src/stores/agentStore.ts` - Added name field to AgentConfig
 
 ### Documentation:
+
 - `ORBIT_REBRANDING.md`
 - `GOOGLE_SETUP_GUIDE.md`
 - `QUICK_GOOGLE_SETUP.md`
@@ -206,6 +234,7 @@
 ## 🎉 Summary
 
 This update significantly improves the user experience with:
+
 - Better branding (Orbits)
 - Easier Google setup (no .env editing)
 - More intuitive Orbit creation (2-column layout)

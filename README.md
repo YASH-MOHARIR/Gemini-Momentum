@@ -12,6 +12,7 @@ Momentum gives you an AI coworker that watches your folders, organizes files, ex
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 18+
 - Gemini API key ([Get one free](https://aistudio.google.com/apikey))
 - Google Cloud Console project (for Gmail/Sheets features)
@@ -84,6 +85,7 @@ Run up to 5 file watchers simultaneously, each with independent configurations:
 - **Individual controls** - Start, pause, resume, stop each watcher
 
 **Natural Language Rules:**
+
 ```
 "PDFs to Documents folder"
 "Images older than 6 months to Archive"
@@ -99,16 +101,17 @@ Run up to 5 file watchers simultaneously, each with independent configurations:
 Analyzes images using Gemini Vision API for intelligent processing.
 
 **Capabilities:**
+
 - **Receipt OCR** - Extracts vendor, date, amount, category
 - **Screenshot Analysis** - Detects app name and content type
 - **Image Categorization** - Classifies into receipts, screenshots, photos, documents, memes
 - **Smart Rename** - Generates semantic filenames from image content
 
-| Before | After |
-|--------|-------|
-| `IMG_3847.jpg` | `2026-01-17_Starbucks_Receipt_$8.50.jpg` |
-| `Screenshot 2026-01-17.png` | `Momentum_App_UI_Mockup.png` |
-| `Document (3).pdf` | `Q4_Sales_Report_2025.pdf` |
+| Before                      | After                                    |
+| --------------------------- | ---------------------------------------- |
+| `IMG_3847.jpg`              | `2026-01-17_Starbucks_Receipt_$8.50.jpg` |
+| `Screenshot 2026-01-17.png` | `Momentum_App_UI_Mockup.png`             |
+| `Document (3).pdf`          | `Q4_Sales_Report_2025.pdf`               |
 
 **Supported formats:** PNG, JPG, JPEG, GIF, WEBP, HEIC, HEIF
 
@@ -118,28 +121,31 @@ Analyzes images using Gemini Vision API for intelligent processing.
 
 Reads and extracts content from various document formats:
 
-| Category | Formats |
-|----------|---------|
-| Documents | PDF, DOCX, DOC, TXT, MD, RTF |
-| Spreadsheets | XLSX, XLS, CSV |
-| Data | JSON, XML, YAML |
-| Code | JS, TS, PY, HTML, CSS, and more |
+| Category     | Formats                         |
+| ------------ | ------------------------------- |
+| Documents    | PDF, DOCX, DOC, TXT, MD, RTF    |
+| Spreadsheets | XLSX, XLS, CSV                  |
+| Data         | JSON, XML, YAML                 |
+| Code         | JS, TS, PY, HTML, CSS, and more |
 
 ---
 
 ### 🔗 Google Integration
 
 **Gmail Integration**
+
 - Search emails by date, sender, keywords
 - Download attachments automatically
 - Process with Vision API
 
 **Google Sheets Export**
+
 - Create spreadsheets from processed data
 - Auto-formatting with formulas
 - Returns shareable link
 
 **End-to-End Pipeline**
+
 ```
 "Create expense report from Gmail receipts"
     ↓
@@ -164,6 +170,7 @@ Analyze disk usage with intelligent insights:
 - **Cleanup suggestions** - AI-generated recommendations
 
 **Interactive Visualizations:**
+
 - Bar chart (storage by type)
 - Pie chart (distribution)
 - Sortable tables
@@ -209,18 +216,19 @@ User Request
 
 Complete file management with safety features:
 
-| Operation | Description |
-|-----------|-------------|
-| List | Browse directories with filters |
-| Read | Parse PDF, DOCX, XLSX, and more |
-| Write | Create or overwrite files |
-| Create Folder | Nested directory creation |
-| Delete | Safe deletion to app trash |
-| Move | Cross-folder file moving |
-| Rename | AI-suggested names |
-| Copy | Duplicate files/folders |
+| Operation     | Description                     |
+| ------------- | ------------------------------- |
+| List          | Browse directories with filters |
+| Read          | Parse PDF, DOCX, XLSX, and more |
+| Write         | Create or overwrite files       |
+| Create Folder | Nested directory creation       |
+| Delete        | Safe deletion to app trash      |
+| Move          | Cross-folder file moving        |
+| Rename        | AI-suggested names              |
+| Copy          | Duplicate files/folders         |
 
 **Trash System:**
+
 - All deletions go to app trash (not system trash)
 - Restore files to original location
 - Last 100 deleted items retained
@@ -243,6 +251,7 @@ Safety-first approach for destructive operations:
 ### 🎨 User Interface
 
 **Three-Panel Layout:**
+
 ```
 ┌──────────────┬────────────────────┬─────────────────┐
 │   Sidebar    │    Main Panel      │   Right Panel   │
@@ -257,6 +266,7 @@ Safety-first approach for destructive operations:
 ```
 
 **Features:**
+
 - **Mode Switching** - Chat Mode / Agent Mode
 - **Resizable Panels** - Drag to resize (250-600px)
 - **Streaming Responses** - Real-time AI output
@@ -273,6 +283,7 @@ Safety-first approach for destructive operations:
 - App stays alive in background
 
 **Menu:**
+
 ```
 🟢 Momentum - 3 Agents Running
 ├─ Show Window
@@ -319,51 +330,51 @@ Safety-first approach for destructive operations:
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| Desktop | Electron 28 | Native app container |
-| Frontend | React 18 | UI components |
-| Language | TypeScript | Type safety |
-| State | Zustand | Global state management |
-| Styling | Tailwind CSS 4 | Utility-first CSS |
-| Charts | Recharts | Data visualization |
-| AI | @google/generative-ai | Gemini API SDK |
-| File Watch | chokidar | File system monitoring |
-| PDF | pdf-parse | PDF extraction |
-| Word | mammoth | DOCX extraction |
-| Excel | xlsx | Spreadsheet read/write |
-| CSV | papaparse | CSV parsing |
+| Layer      | Technology            | Purpose                 |
+| ---------- | --------------------- | ----------------------- |
+| Desktop    | Electron 28           | Native app container    |
+| Frontend   | React 18              | UI components           |
+| Language   | TypeScript            | Type safety             |
+| State      | Zustand               | Global state management |
+| Styling    | Tailwind CSS 4        | Utility-first CSS       |
+| Charts     | Recharts              | Data visualization      |
+| AI         | @google/generative-ai | Gemini API SDK          |
+| File Watch | chokidar              | File system monitoring  |
+| PDF        | pdf-parse             | PDF extraction          |
+| Word       | mammoth               | DOCX extraction         |
+| Excel      | xlsx                  | Spreadsheet read/write  |
+| CSV        | papaparse             | CSV parsing             |
 
 ---
 
 ## 🔧 Available AI Tools
 
-| Tool | Description |
-|------|-------------|
-| `list_directory` | List files and folders with filters |
-| `read_file` | Read and parse file contents |
-| `write_file` | Create or overwrite files |
-| `create_folder` | Create directories (nested) |
-| `delete_file` | Move to trash with restore capability |
-| `move_file` | Move files/folders |
-| `rename_file` | Rename with AI suggestions |
-| `copy_file` | Copy files/folders |
-| `analyze_image` | Vision analysis for images |
-| `analyze_storage` | Disk usage insights |
-| `create_spreadsheet` | Generate formatted XLSX |
+| Tool                 | Description                           |
+| -------------------- | ------------------------------------- |
+| `list_directory`     | List files and folders with filters   |
+| `read_file`          | Read and parse file contents          |
+| `write_file`         | Create or overwrite files             |
+| `create_folder`      | Create directories (nested)           |
+| `delete_file`        | Move to trash with restore capability |
+| `move_file`          | Move files/folders                    |
+| `rename_file`        | Rename with AI suggestions            |
+| `copy_file`          | Copy files/folders                    |
+| `analyze_image`      | Vision analysis for images            |
+| `analyze_storage`    | Disk usage insights                   |
+| `create_spreadsheet` | Generate formatted XLSX               |
 
 ---
 
 ## 📊 Project Stats
 
-| Metric | Value |
-|--------|-------|
-| Lines of Code | ~8,000 |
-| React Components | 12 |
-| Backend Services | 15 |
-| AI Tools | 11 |
-| Supported Platforms | 3 |
-| Max Concurrent Agents | 5 |
+| Metric                | Value  |
+| --------------------- | ------ |
+| Lines of Code         | ~8,000 |
+| React Components      | 12     |
+| Backend Services      | 15     |
+| AI Tools              | 11     |
+| Supported Platforms   | 3      |
+| Max Concurrent Agents | 5      |
 
 ---
 

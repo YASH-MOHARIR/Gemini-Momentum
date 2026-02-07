@@ -1,48 +1,37 @@
 import { useState, useEffect } from 'react'
-import {
-  FolderOpen,
-  Plus,
-  X,
-  Play,
-  Lightbulb,
-  GripVertical,
-  FileText,
-  Save
-} from 'lucide-react'
+import { FolderOpen, Plus, X, Play, Lightbulb, GripVertical, FileText, Save } from 'lucide-react'
 import { AgentConfig, AgentRule, useAgentStore } from '../stores/agentStore'
 
 interface Props {
   onStart: (config: AgentConfig) => void
-  isEditing?: boolean  // True when editing existing config
-  onCancel?: () => void  // Called when canceling edit
+  isEditing?: boolean // True when editing existing config
+  onCancel?: () => void // Called when canceling edit
 }
 
 const MAX_RULES = 5
 const MAX_CHARS = 200
 
 const EXAMPLE_RULES = [
-  "PDFs go to Documents folder, organized by month",
-  "Images to Pictures. Receipts get renamed with date and vendor",
-  "Code files (.js, .py, .ts) to Code folder, separated by language",
-  "Screenshots to Screenshots folder",
-  "Archives (.zip, .rar) to Archives folder"
+  'PDFs go to Documents folder, organized by month',
+  'Images to Pictures. Receipts get renamed with date and vendor',
+  'Code files (.js, .py, .ts) to Code folder, separated by language',
+  'Screenshots to Screenshots folder',
+  'Archives (.zip, .rar) to Archives folder'
 ]
 
 export default function AgentSetup({ onStart, isEditing = false, onCancel }: Props) {
   const { config: existingConfig, setStatus } = useAgentStore()
 
   // Initialize from existing config if available, otherwise start fresh
-  const [watchFolder, setWatchFolder] = useState('')
-  const [rules, setRules] = useState<AgentRule[]>([
-    { id: '1', text: '', enabled: true, order: 1 }
-  ])
+  const [watchFolders, setWatchFolders] = useState<string[]>([])
+  const [rules, setRules] = useState<AgentRule[]>([{ id: '1', text: '', enabled: true, order: 1 }])
   const [enableLog, setEnableLog] = useState(true)
   const [isStarting, setIsStarting] = useState(false)
 
   // Load existing config when component mounts or when editing
   useEffect(() => {
     if (existingConfig) {
-      setWatchFolder(existingConfig.watchFolder || '')
+      setWatchFolders(existingConfig.watchFolders || [])
       if (existingConfig.rules && existingConfig.rules.length > 0) {
         setRules(existingConfig.rules)
       }
@@ -52,9 +41,13 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
 
   const handleSelectFolder = async () => {
     const folder = await window.api.selectFolder()
-    if (folder) {
-      setWatchFolder(folder)
+    if (folder && !watchFolders.includes(folder)) {
+      setWatchFolders([...watchFolders, folder])
     }
+  }
+
+  const removeFolder = (folderToRemove: string) => {
+    setWatchFolders(watchFolders.filter((f) => f !== folderToRemove))
   }
 
   const addRule = () => {
@@ -69,18 +62,16 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
   }
 
   const updateRuleText = (id: string, text: string) => {
-    setRules(rules.map(r =>
-      r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r
-    ))
+    setRules(rules.map((r) => (r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r)))
   }
 
   const removeRule = (id: string) => {
     if (rules.length <= 1) return // Keep at least one rule
-    setRules(rules.filter(r => r.id !== id))
+    setRules(rules.filter((r) => r.id !== id))
   }
 
   const useExample = (index: number) => {
-    const emptyRule = rules.find(r => !r.text.trim())
+    const emptyRule = rules.find((r) => !r.text.trim())
     if (emptyRule) {
       updateRuleText(emptyRule.id, EXAMPLE_RULES[index])
     } else if (rules.length < MAX_RULES) {
@@ -95,16 +86,19 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
   }
 
   const handleStart = async () => {
-    const activeRules = rules.filter(r => r.text.trim())
-    if (!watchFolder || activeRules.length === 0) return
+    const activeRules = rules.filter((r) => r.text.trim())
+    if (watchFolders.length === 0 || activeRules.length === 0) return
 
     setIsStarting(true)
 
-    // Build log path - in watch folder
-    const logPath = watchFolder + (watchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
+    // Build log path - in first watch folder
+    const primaryFolder = watchFolders[0]
+    const logPath =
+      primaryFolder + (primaryFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
 
     const config: AgentConfig = {
-      watchFolder,
+      id: existingConfig?.id || `orbit-${Date.now()}`,
+      watchFolders,
       rules: activeRules.map((r, i) => ({ ...r, order: i + 1 })),
       enableActivityLog: enableLog,
       logPath
@@ -114,7 +108,7 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
     setIsStarting(false)
   }
 
-  const canStart = watchFolder && rules.some(r => r.text.trim())
+  const canStart = watchFolders.length > 0 && rules.some((r) => r.text.trim())
   const rulesRemaining = MAX_RULES - rules.length
 
   return (
@@ -125,7 +119,9 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
           {isEditing ? 'Edit Orbit Rules' : 'Orbit Setup'}
         </h2>
         <p className="text-xs text-slate-500 mt-1">
-          {isEditing ? 'Update your file processing rules' : 'Configure an AI-powered file watcher that automatically organizes, renames, and processes files based on your custom rules'}
+          {isEditing
+            ? 'Update your file processing rules'
+            : 'Configure an AI-powered file watcher that automatically organizes, renames, and processes files based on your custom rules'}
         </p>
       </div>
 
@@ -133,27 +129,40 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
       <div className="space-y-2">
         <label className="flex items-center gap-2 text-xs font-medium text-slate-400 uppercase tracking-wide">
           <FolderOpen className="w-3.5 h-3.5" />
-          Watch Folder
+          Watch Folders
         </label>
 
-        <div className="flex gap-2">
-          <div
-            className={`
-              flex-1 px-3 py-2 rounded-lg text-sm truncate
-              ${watchFolder
-                ? 'bg-slate-900 text-slate-200 border border-slate-700'
-                : 'bg-slate-900/50 text-slate-500 border border-dashed border-slate-700'
-              }
-            `}
-            title={watchFolder}
-          >
-            {watchFolder || 'No folder selected'}
-          </div>
+        <div className="space-y-2">
+          {watchFolders.map((folder, index) => (
+            <div key={index} className="flex gap-2">
+              <div
+                className="flex-1 px-3 py-2 rounded-lg text-sm truncate bg-slate-900 text-slate-200 border border-slate-700"
+                title={folder}
+              >
+                {folder}
+              </div>
+              <button
+                onClick={() => removeFolder(folder)}
+                className="p-2 bg-slate-800 hover:bg-slate-700 hover:text-red-400 text-slate-500 rounded-lg transition-colors"
+                title="Remove folder"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+
+          {watchFolders.length === 0 && (
+            <div className="px-3 py-2 rounded-lg text-sm bg-slate-900/50 text-slate-500 border border-dashed border-slate-700 text-center italic">
+              No folders selected
+            </div>
+          )}
+
           <button
             onClick={handleSelectFolder}
-            className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition-colors"
+            className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
           >
-            Browse
+            <Plus className="w-4 h-4" />
+            Add Watch Folder
           </button>
         </div>
       </div>
@@ -181,9 +190,7 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
                 </div>
 
                 {/* Rule number */}
-                <div className="pt-2 text-xs font-medium text-slate-500 w-4">
-                  {index + 1}.
-                </div>
+                <div className="pt-2 text-xs font-medium text-slate-500 w-4">{index + 1}.</div>
 
                 {/* Input */}
                 <div className="flex-1">
@@ -195,7 +202,9 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
                     className="agent-rule-input w-full px-3 py-2 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none"
                   />
                   <div className="flex justify-between mt-1">
-                    <span className={`text-xs ${rule.text.length >= MAX_CHARS ? 'text-amber-400' : 'text-slate-600'}`}>
+                    <span
+                      className={`text-xs ${rule.text.length >= MAX_CHARS ? 'text-amber-400' : 'text-slate-600'}`}
+                    >
                       {rule.text.length}/{MAX_CHARS}
                     </span>
                   </div>
@@ -207,9 +216,10 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
                   disabled={rules.length <= 1}
                   className={`
                     p-1.5 rounded-md transition-all mt-1.5
-                    ${rules.length <= 1
-                      ? 'text-slate-700 cursor-not-allowed'
-                      : 'text-slate-500 hover:text-red-400 hover:bg-red-900/20'
+                    ${
+                      rules.length <= 1
+                        ? 'text-slate-700 cursor-not-allowed'
+                        : 'text-slate-500 hover:text-red-400 hover:bg-red-900/20'
                     }
                   `}
                   title={rules.length <= 1 ? 'At least one rule required' : 'Remove rule'}
@@ -267,9 +277,7 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
             Save activity log
           </label>
         </div>
-        <span className="text-xs text-slate-500">
-          Excel file in watch folder
-        </span>
+        <span className="text-xs text-slate-500">Excel file in watch folder</span>
       </div>
 
       {/* Start/Save Button */}
@@ -279,9 +287,10 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
           disabled={!canStart || isStarting}
           className={`
             w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
-            ${canStart && !isStarting
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30'
-              : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+            ${
+              canStart && !isStarting
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30'
+                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
             }
           `}
         >
@@ -313,8 +322,8 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
       {/* Validation hints */}
       {!canStart && (
         <div className="text-xs text-center text-slate-500">
-          {!watchFolder && 'Select a folder to watch'}
-          {watchFolder && !rules.some(r => r.text.trim()) && 'Add at least one rule'}
+          {watchFolders.length === 0 && 'Select a folder to watch'}
+          {watchFolders.length > 0 && !rules.some((r) => r.text.trim()) && 'Add at least one rule'}
         </div>
       )}
     </div>

@@ -33,23 +33,20 @@ const HEADERS = [
 ]
 
 const COLUMN_WIDTHS = [
-  { wch: 20 },  // Timestamp
-  { wch: 30 },  // Original Name
-  { wch: 10 },  // Action
-  { wch: 40 },  // Destination
-  { wch: 30 },  // New Name
-  { wch: 8 },   // Rule #
-  { wch: 8 },   // Used AI
+  { wch: 20 }, // Timestamp
+  { wch: 30 }, // Original Name
+  { wch: 10 }, // Action
+  { wch: 40 }, // Destination
+  { wch: 30 }, // New Name
+  { wch: 8 }, // Rule #
+  { wch: 8 }, // Used AI
   { wch: 10 }, // Confidence
-  { wch: 30 }   // Error
+  { wch: 30 } // Error
 ]
 
 // ============ Main Function ============
 
-export async function logActivity(
-  logPath: string,
-  entry: ActivityEntry
-): Promise<void> {
+export async function logActivity(logPath: string, entry: ActivityEntry): Promise<void> {
   let workbook: XLSX.WorkBook
   let worksheet: XLSX.WorkSheet
   let isNewFile = false
@@ -59,7 +56,7 @@ export async function logActivity(
     const buffer = await fs.readFile(logPath)
     workbook = XLSX.read(buffer, { type: 'buffer' })
     worksheet = workbook.Sheets['Activity']
-    
+
     if (!worksheet) {
       // Sheet doesn't exist, create it
       worksheet = createNewSheet()
@@ -103,15 +100,14 @@ export async function logActivity(
   const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
   await fs.writeFile(logPath, buffer)
 
-  console.log(`[ACTIVITY LOG] ${isNewFile ? 'Created' : 'Updated'}: ${entry.originalName} → ${entry.action}`)
+  console.log(
+    `[ACTIVITY LOG] ${isNewFile ? 'Created' : 'Updated'}: ${entry.originalName} → ${entry.action}`
+  )
 }
 
 // ============ Batch Logging ============
 
-export async function logActivities(
-  logPath: string,
-  entries: ActivityEntry[]
-): Promise<void> {
+export async function logActivities(logPath: string, entries: ActivityEntry[]): Promise<void> {
   if (entries.length === 0) return
 
   let workbook: XLSX.WorkBook
@@ -122,7 +118,7 @@ export async function logActivities(
     const buffer = await fs.readFile(logPath)
     workbook = XLSX.read(buffer, { type: 'buffer' })
     worksheet = workbook.Sheets['Activity']
-    
+
     if (!worksheet) {
       worksheet = createNewSheet()
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Activity')
@@ -134,7 +130,7 @@ export async function logActivities(
   }
 
   // Create all rows
-  const rows = entries.map(entry => [
+  const rows = entries.map((entry) => [
     formatTimestamp(entry.timestamp),
     entry.originalName,
     entry.action,
@@ -163,19 +159,17 @@ export async function logActivities(
 
 // ============ Read Log ============
 
-export async function readActivityLog(
-  logPath: string
-): Promise<ActivityEntry[]> {
+export async function readActivityLog(logPath: string): Promise<ActivityEntry[]> {
   try {
     const buffer = await fs.readFile(logPath)
     const workbook = XLSX.read(buffer, { type: 'buffer' })
     const worksheet = workbook.Sheets['Activity']
-    
+
     if (!worksheet) return []
 
     // Convert to JSON, skip header row
     const data = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet)
-    
+
     return data.map((row, index) => ({
       id: `log-${index}`,
       timestamp: row['Timestamp'] || '',
@@ -196,9 +190,7 @@ export async function readActivityLog(
 
 // ============ Get Log Stats ============
 
-export async function getLogStats(
-  logPath: string
-): Promise<{
+export async function getLogStats(logPath: string): Promise<{
   totalEntries: number
   moved: number
   renamed: number
@@ -207,14 +199,14 @@ export async function getLogStats(
   aiCalls: number
 }> {
   const entries = await readActivityLog(logPath)
-  
+
   return {
     totalEntries: entries.length,
-    moved: entries.filter(e => e.action === 'moved').length,
-    renamed: entries.filter(e => e.action === 'renamed').length,
-    skipped: entries.filter(e => e.action === 'skipped').length,
-    errors: entries.filter(e => e.action === 'error').length,
-    aiCalls: entries.filter(e => e.usedAI).length
+    moved: entries.filter((e) => e.action === 'moved').length,
+    renamed: entries.filter((e) => e.action === 'renamed').length,
+    skipped: entries.filter((e) => e.action === 'skipped').length,
+    errors: entries.filter((e) => e.action === 'error').length,
+    aiCalls: entries.filter((e) => e.usedAI).length
   }
 }
 
@@ -222,13 +214,13 @@ export async function getLogStats(
 
 function createNewSheet(): XLSX.WorkSheet {
   const worksheet = XLSX.utils.aoa_to_sheet([HEADERS])
-  
+
   // Set column widths
   worksheet['!cols'] = COLUMN_WIDTHS
-  
+
   // Style header row (bold) - Note: styling requires xlsx-style or similar
   // Basic xlsx doesn't support styling, but we set up the structure
-  
+
   return worksheet
 }
 

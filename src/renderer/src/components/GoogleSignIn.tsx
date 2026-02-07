@@ -1,4 +1,4 @@
-import  { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { LogIn, LogOut, Loader2, X, ExternalLink } from 'lucide-react'
 import { JSX } from 'react/jsx-runtime'
 
@@ -152,16 +152,23 @@ export default function GoogleSignIn(): JSX.Element {
                   <>
                     <div className="bg-emerald-900/20 border border-emerald-800/30 rounded-lg p-4">
                       <p className="text-sm text-slate-300">
-                        <strong className="text-emerald-400">Quick Setup:</strong> Takes 3-5 minutes • Completely FREE • One-time only
+                        <strong className="text-emerald-400">Quick Setup:</strong> Takes 3-5 minutes
+                        • Completely FREE • One-time only
                       </p>
                     </div>
 
                     <div className="space-y-3">
                       <div className="flex gap-3 items-start">
-                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">1</span>
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                          1
+                        </span>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-200">Create Google Cloud Project</p>
-                          <p className="text-xs text-slate-400 mt-1">Click "CREATE" and name it "Momentum"</p>
+                          <p className="text-sm font-medium text-slate-200">
+                            Create Google Cloud Project
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Click "CREATE" and name it "Momentum"
+                          </p>
                           <a
                             href="https://console.cloud.google.com/projectcreate"
                             target="_blank"
@@ -174,22 +181,53 @@ export default function GoogleSignIn(): JSX.Element {
                       </div>
 
                       <div className="flex gap-3 items-start">
-                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">2</span>
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                          2
+                        </span>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-200">Enable 3 APIs (click ENABLE on each)</p>
+                          <p className="text-sm font-medium text-slate-200">
+                            Enable 3 APIs (click ENABLE on each)
+                          </p>
                           <div className="mt-2 space-y-1">
-                            <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:underline">→ Gmail API</a>
-                            <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:underline">→ Google Sheets API</a>
-                            <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:underline">→ Google Drive API</a>
+                            <a
+                              href="https://console.cloud.google.com/apis/library/gmail.googleapis.com"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block text-xs text-emerald-400 hover:underline"
+                            >
+                              → Gmail API
+                            </a>
+                            <a
+                              href="https://console.cloud.google.com/apis/library/sheets.googleapis.com"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block text-xs text-emerald-400 hover:underline"
+                            >
+                              → Google Sheets API
+                            </a>
+                            <a
+                              href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block text-xs text-emerald-400 hover:underline"
+                            >
+                              → Google Drive API
+                            </a>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex gap-3 items-start">
-                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">3</span>
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                          3
+                        </span>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-200">Configure OAuth Consent</p>
-                          <p className="text-xs text-slate-400 mt-1">Select "External" → Fill app name → Add your email as test user</p>
+                          <p className="text-sm font-medium text-slate-200">
+                            Configure OAuth Consent
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Select "External" → Fill app name → Add your email as test user
+                          </p>
                           <a
                             href="https://console.cloud.google.com/apis/credentials/consent"
                             target="_blank"
@@ -202,10 +240,16 @@ export default function GoogleSignIn(): JSX.Element {
                       </div>
 
                       <div className="flex gap-3 items-start">
-                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">4</span>
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                          4
+                        </span>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-200">Create OAuth Credentials</p>
-                          <p className="text-xs text-slate-400 mt-1">CREATE CREDENTIALS → OAuth client ID → Desktop app</p>
+                          <p className="text-sm font-medium text-slate-200">
+                            Create OAuth Credentials
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            CREATE CREDENTIALS → OAuth client ID → Desktop app
+                          </p>
                           <a
                             href="https://console.cloud.google.com/apis/credentials"
                             target="_blank"
@@ -218,10 +262,16 @@ export default function GoogleSignIn(): JSX.Element {
                       </div>
 
                       <div className="flex gap-3 items-start">
-                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">5</span>
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                          5
+                        </span>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-200">Enter credentials below</p>
-                          <p className="text-xs text-slate-400 mt-1">Copy Client ID and Client Secret from the popup</p>
+                          <p className="text-sm font-medium text-slate-200">
+                            Enter credentials below
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Copy Client ID and Client Secret from the popup
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -232,7 +282,10 @@ export default function GoogleSignIn(): JSX.Element {
                       </p>
                       <ul className="text-xs text-slate-400 space-y-1 ml-4 list-disc">
                         <li>Keep the credentials popup open while entering below</li>
-                        <li>When you see "Google hasn't verified this app" - click Continue (it's your own app!)</li>
+                        <li>
+                          When you see "Google hasn't verified this app" - click Continue (it's your
+                          own app!)
+                        </li>
                         <li>Full detailed guide available in GOOGLE_SETUP_GUIDE.md</li>
                       </ul>
                     </div>
@@ -256,7 +309,8 @@ export default function GoogleSignIn(): JSX.Element {
                   <>
                     <div className="bg-emerald-900/20 border border-emerald-800/30 rounded-lg p-4">
                       <p className="text-sm text-slate-300">
-                        <strong className="text-emerald-400">Step 5:</strong> Paste your credentials from Google Cloud Console
+                        <strong className="text-emerald-400">Step 5:</strong> Paste your credentials
+                        from Google Cloud Console
                       </p>
                     </div>
 
@@ -297,7 +351,8 @@ export default function GoogleSignIn(): JSX.Element {
 
                     <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
                       <p className="text-xs text-slate-400">
-                        🔒 Your credentials are stored securely on your computer and never sent to any third-party servers.
+                        🔒 Your credentials are stored securely on your computer and never sent to
+                        any third-party servers.
                       </p>
                     </div>
 
@@ -357,11 +412,7 @@ export default function GoogleSignIn(): JSX.Element {
           className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-700 transition-colors"
         >
           {user.picture ? (
-            <img
-              src={user.picture}
-              alt={user.name}
-              className="w-5 h-5 rounded-full"
-            />
+            <img src={user.picture} alt={user.name} className="w-5 h-5 rounded-full" />
           ) : (
             <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-medium">
               {user.name.charAt(0).toUpperCase()}
@@ -374,10 +425,7 @@ export default function GoogleSignIn(): JSX.Element {
 
         {showMenu && (
           <>
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => setShowMenu(false)}
-            />
+            <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
             <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 py-1">
               <div className="px-3 py-2 border-b border-slate-700">
                 <p className="text-xs text-slate-400">Signed in as</p>
@@ -426,16 +474,23 @@ export default function GoogleSignIn(): JSX.Element {
             <div className="p-6 space-y-4">
               <div className="bg-emerald-900/20 border border-emerald-800/30 rounded-lg p-4">
                 <p className="text-sm text-slate-300">
-                  <strong className="text-emerald-400">Quick Setup:</strong> Takes 3-5 minutes • Completely FREE • One-time only
+                  <strong className="text-emerald-400">Quick Setup:</strong> Takes 3-5 minutes •
+                  Completely FREE • One-time only
                 </p>
               </div>
 
               <div className="space-y-3">
                 <div className="flex gap-3 items-start">
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">1</span>
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                    1
+                  </span>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-200">Create Google Cloud Project</p>
-                    <p className="text-xs text-slate-400 mt-1">Click "CREATE" and name it "Momentum"</p>
+                    <p className="text-sm font-medium text-slate-200">
+                      Create Google Cloud Project
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Click "CREATE" and name it "Momentum"
+                    </p>
                     <a
                       href="https://console.cloud.google.com/projectcreate"
                       target="_blank"
@@ -448,22 +503,51 @@ export default function GoogleSignIn(): JSX.Element {
                 </div>
 
                 <div className="flex gap-3 items-start">
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">2</span>
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                    2
+                  </span>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-200">Enable 3 APIs (click ENABLE on each)</p>
+                    <p className="text-sm font-medium text-slate-200">
+                      Enable 3 APIs (click ENABLE on each)
+                    </p>
                     <div className="mt-2 space-y-1">
-                      <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:underline">→ Gmail API</a>
-                      <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:underline">→ Google Sheets API</a>
-                      <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:underline">→ Google Drive API</a>
+                      <a
+                        href="https://console.cloud.google.com/apis/library/gmail.googleapis.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-emerald-400 hover:underline"
+                      >
+                        → Gmail API
+                      </a>
+                      <a
+                        href="https://console.cloud.google.com/apis/library/sheets.googleapis.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-emerald-400 hover:underline"
+                      >
+                        → Google Sheets API
+                      </a>
+                      <a
+                        href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-emerald-400 hover:underline"
+                      >
+                        → Google Drive API
+                      </a>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex gap-3 items-start">
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">3</span>
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                    3
+                  </span>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-200">Configure OAuth Consent</p>
-                    <p className="text-xs text-slate-400 mt-1">Select "External" → Fill app name → Add your email as test user</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Select "External" → Fill app name → Add your email as test user
+                    </p>
                     <a
                       href="https://console.cloud.google.com/apis/credentials/consent"
                       target="_blank"
@@ -476,10 +560,14 @@ export default function GoogleSignIn(): JSX.Element {
                 </div>
 
                 <div className="flex gap-3 items-start">
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">4</span>
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                    4
+                  </span>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-200">Create OAuth Credentials</p>
-                    <p className="text-xs text-slate-400 mt-1">CREATE CREDENTIALS → OAuth client ID → Desktop app</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      CREATE CREDENTIALS → OAuth client ID → Desktop app
+                    </p>
                     <a
                       href="https://console.cloud.google.com/apis/credentials"
                       target="_blank"
@@ -492,14 +580,18 @@ export default function GoogleSignIn(): JSX.Element {
                 </div>
 
                 <div className="flex gap-3 items-start">
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">5</span>
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                    5
+                  </span>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-200">Copy to .env file</p>
                     <div className="mt-2 bg-slate-950 border border-slate-700 rounded p-2 font-mono text-xs text-slate-300">
                       <div>GOOGLE_CLIENT_ID=your-id-here</div>
                       <div>GOOGLE_CLIENT_SECRET=your-secret-here</div>
                     </div>
-                    <p className="text-xs text-slate-400 mt-2">Save in project root folder, then restart Momentum</p>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Save in project root folder, then restart Momentum
+                    </p>
                   </div>
                 </div>
               </div>
@@ -510,7 +602,10 @@ export default function GoogleSignIn(): JSX.Element {
                 </p>
                 <ul className="text-xs text-slate-400 space-y-1 ml-4 list-disc">
                   <li>Keep the credentials popup open while editing .env</li>
-                  <li>When you see "Google hasn't verified this app" - click Continue (it's your own app!)</li>
+                  <li>
+                    When you see "Google hasn't verified this app" - click Continue (it's your own
+                    app!)
+                  </li>
                   <li>Full detailed guide available in GOOGLE_SETUP_GUIDE.md</li>
                 </ul>
               </div>

@@ -1,14 +1,6 @@
 /* eslint-disable prettier/prettier */
 import { useState } from 'react'
-import {
-  X,
-  Folder,
-  File,
-  CheckCircle,
-  ChevronDown,
-  ChevronRight,
-  Sparkles
-} from 'lucide-react'
+import { X, Folder, File, CheckCircle, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
 import { FileNode, OrganizationResult } from '../stores/appStore'
 
 interface BeforeAfterViewProps {
@@ -29,7 +21,7 @@ function formatBytes(bytes: number): string {
 function countItems(nodes: FileNode[]): { files: number; folders: number } {
   let files = 0
   let folders = 0
-  
+
   const count = (items: FileNode[]) => {
     for (const item of items) {
       if (item.isDirectory) {
@@ -40,19 +32,19 @@ function countItems(nodes: FileNode[]): { files: number; folders: number } {
       }
     }
   }
-  
+
   count(nodes)
   return { files, folders }
 }
 
 // ============ Tree Node Component ============
 
-function TreeNode({ 
-  node, 
-  depth = 0, 
-  isNew = false, 
-  isDeleted = false 
-}: { 
+function TreeNode({
+  node,
+  depth = 0,
+  isNew = false,
+  isDeleted = false
+}: {
   node: FileNode
   depth?: number
   isNew?: boolean
@@ -60,27 +52,23 @@ function TreeNode({
 }) {
   const [isExpanded, setIsExpanded] = useState(depth < 2)
   const hasChildren = node.isDirectory && node.children && node.children.length > 0
-  
-  const nodeClass = isNew 
-    ? 'text-emerald-400' 
-    : isDeleted 
-      ? 'text-red-400 line-through opacity-60' 
+
+  const nodeClass = isNew
+    ? 'text-emerald-400'
+    : isDeleted
+      ? 'text-red-400 line-through opacity-60'
       : 'text-slate-300'
-  
-  const bgClass = isNew 
-    ? 'bg-emerald-900/20' 
-    : isDeleted 
-      ? 'bg-red-900/20' 
-      : ''
+
+  const bgClass = isNew ? 'bg-emerald-900/20' : isDeleted ? 'bg-red-900/20' : ''
 
   return (
     <div>
-      <div 
+      <div
         className={`flex items-center gap-1 py-0.5 px-1 rounded text-xs ${bgClass} hover:bg-slate-700/30`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
       >
         {hasChildren ? (
-          <button 
+          <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="p-0.5 hover:bg-slate-600 rounded"
           >
@@ -93,42 +81,40 @@ function TreeNode({
         ) : (
           <span className="w-4" />
         )}
-        
+
         {node.isDirectory ? (
           <Folder className={`w-3.5 h-3.5 ${isNew ? 'text-emerald-400' : 'text-amber-400'}`} />
         ) : (
           <File className={`w-3.5 h-3.5 ${nodeClass}`} />
         )}
-        
+
         <span className={`truncate ${nodeClass}`} title={node.path}>
           {node.name}
         </span>
-        
+
         {node.isDirectory && node.children && (
-          <span className="text-slate-500 ml-1">
-            ({node.children.length})
-          </span>
+          <span className="text-slate-500 ml-1">({node.children.length})</span>
         )}
-        
+
         {isNew && (
           <span className="ml-auto px-1 py-0.5 bg-emerald-600 text-white text-[9px] rounded font-medium">
             NEW
           </span>
         )}
-        
+
         {isDeleted && (
           <span className="ml-auto px-1 py-0.5 bg-red-600 text-white text-[9px] rounded font-medium">
             DEL
           </span>
         )}
       </div>
-      
+
       {hasChildren && isExpanded && (
         <div>
           {node.children!.map((child, i) => (
-            <TreeNode 
-              key={`${child.path}-${i}`} 
-              node={child} 
+            <TreeNode
+              key={`${child.path}-${i}`}
+              node={child}
               depth={depth + 1}
               isNew={isNew}
               isDeleted={isDeleted}
@@ -142,14 +128,14 @@ function TreeNode({
 
 // ============ Flat File List Component ============
 
-function FlatFileList({ files, maxShow = 15 }: { files: FileNode[], maxShow?: number }) {
+function FlatFileList({ files, maxShow = 15 }: { files: FileNode[]; maxShow?: number }) {
   const [showAll, setShowAll] = useState(false)
   const displayFiles = showAll ? files : files.slice(0, maxShow)
-  
+
   return (
     <div className="space-y-0.5">
       {displayFiles.map((file, i) => (
-        <div 
+        <div
           key={`${file.path}-${i}`}
           className="flex items-center gap-1 py-0.5 px-2 text-xs text-slate-400"
         >
@@ -235,11 +221,9 @@ export default function BeforeAfterView({ result, onClose }: BeforeAfterViewProp
             </div>
             <div className="flex-1 overflow-y-auto p-2 bg-slate-900/20">
               {before.length > 20 ? (
-                <FlatFileList files={before.filter(n => !n.isDirectory)} />
+                <FlatFileList files={before.filter((n) => !n.isDirectory)} />
               ) : (
-                before.map((node, i) => (
-                  <TreeNode key={`before-${node.path}-${i}`} node={node} />
-                ))
+                before.map((node, i) => <TreeNode key={`before-${node.path}-${i}`} node={node} />)
               )}
             </div>
           </div>
@@ -257,10 +241,10 @@ export default function BeforeAfterView({ result, onClose }: BeforeAfterViewProp
             </div>
             <div className="flex-1 overflow-y-auto p-2 bg-slate-900/20">
               {after.map((node, i) => (
-                <TreeNode 
-                  key={`after-${node.path}-${i}`} 
-                  node={node} 
-                  isNew={node.isDirectory && !before.some(b => b.path === node.path)}
+                <TreeNode
+                  key={`after-${node.path}-${i}`}
+                  node={node}
+                  isNew={node.isDirectory && !before.some((b) => b.path === node.path)}
                 />
               ))}
             </div>

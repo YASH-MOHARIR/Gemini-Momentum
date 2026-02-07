@@ -16,7 +16,7 @@ export interface AgentRule {
 
 export interface AgentConfig {
   id: string
-  watchFolder: string
+  watchFolders: string[]
   rules: AgentRule[]
   enableActivityLog: boolean
   logPath: string
@@ -68,23 +68,29 @@ export function startWatcher(
     return { success: false, error: `Maximum ${MAX_WATCHERS} watchers allowed` }
   }
 
+  // Check for conflicts
   for (const [_id, instance] of watchers.entries()) {
-    if (instance.config.watchFolder === agentConfig.watchFolder) {
-      return { success: false, error: 'This folder is already being watched' }
+    for (const folder of agentConfig.watchFolders) {
+      if (instance.config.watchFolders.includes(folder)) {
+        return {
+          success: false,
+          error: `Folder "${path.basename(folder)}" is already being watched`
+        }
+      }
     }
   }
 
   mainWindowRef = mainWindow
   const watcherId = agentConfig.id
 
-  console.log(`[WATCHER ${watcherId}] Starting watcher on: ${agentConfig.watchFolder}`)
+  console.log(`[WATCHER ${watcherId}] Starting watcher on:`, agentConfig.watchFolders)
   console.log(
     `[WATCHER ${watcherId}] Rules:`,
     agentConfig.rules.map((r) => r.text)
   )
 
   try {
-    const watcher = chokidar.watch(agentConfig.watchFolder, {
+    const watcher = chokidar.watch(agentConfig.watchFolders, {
       ignored: [
         /(^|[\/\\])\../,
         /momentum_activity_log\.xlsx$/,
@@ -186,7 +192,7 @@ export function resumeWatcher(watcherId: string): { success: boolean; paused: bo
 export function getWatcherStatus(watcherId?: string): {
   running: boolean
   paused: boolean
-  watchFolder?: string
+  watchFolders?: string[]
   rulesCount?: number
 } {
   if (watcherId) {
@@ -195,7 +201,7 @@ export function getWatcherStatus(watcherId?: string): {
       return {
         running: true,
         paused: instance.isPaused,
-        watchFolder: instance.config.watchFolder,
+        watchFolders: instance.config.watchFolders,
         rulesCount: instance.config.rules.length
       }
     }
@@ -321,7 +327,22 @@ async function executeMove(
 ): Promise<ActivityEntry> {
   const instance = watchers.get(watcherId)!
   const fileName = path.basename(filePath)
-  const destFolder = path.join(instance.config.watchFolder, result.destination!)
+
+  // Find which watch folder this file belongs to to resolve relative destinations
+  const sourceDir = path.dirname(filePath)
+  let bestMatchFolder = instance.config.watchFolders[0]
+
+  // Sort by length desc to match longest path (nested folders support)
+  const sortedFolders = [...instance.config.watchFolders].sort((a, b) => b.length - a.length)
+
+  for (const folder of sortedFolders) {
+    if (sourceDir.startsWith(folder)) {
+      bestMatchFolder = folder
+      break
+    }
+  }
+
+  const destFolder = path.join(bestMatchFolder, result.destination!)
   const newFileName = result.rename || fileName
   const destPath = path.join(destFolder, newFileName)
 

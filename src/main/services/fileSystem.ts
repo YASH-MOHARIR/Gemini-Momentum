@@ -255,10 +255,7 @@ async function copyDirectoryRecursive(source: string, dest: string): Promise<voi
  * Move a file or folder to a new location.
  * Handles cross-drive moves, special characters, and various edge cases.
  */
-export async function moveFile(
-  sourcePath: string,
-  destPath: string
-): Promise<OperationResult> {
+export async function moveFile(sourcePath: string, destPath: string): Promise<OperationResult> {
   console.log(`[FS] Moving: ${sourcePath} → ${destPath}`)
 
   try {
@@ -353,10 +350,7 @@ export async function moveFile(
 /**
  * Copy a file or folder to a new location.
  */
-export async function copyFile(
-  sourcePath: string,
-  destPath: string
-): Promise<OperationResult> {
+export async function copyFile(sourcePath: string, destPath: string): Promise<OperationResult> {
   console.log(`[FS] Copying: ${sourcePath} → ${destPath}`)
 
   try {
@@ -410,10 +404,7 @@ export async function copyFile(
 /**
  * Rename a file or folder.
  */
-export async function renameFile(
-  filePath: string,
-  newName: string
-): Promise<OperationResult> {
+export async function renameFile(filePath: string, newName: string): Promise<OperationResult> {
   console.log(`[FS] Renaming: ${filePath} → ${newName}`)
 
   try {

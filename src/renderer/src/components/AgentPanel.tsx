@@ -27,11 +27,11 @@ export default function AgentPanel() {
       console.log('[AGENT PANEL] File processed:', entry.originalName, entry.action)
       addActivity(entry)
       incrementStat('filesProcessed')
-      
+
       if (entry.usedAI) {
         incrementStat('aiCalls')
       }
-      
+
       if (entry.action === 'error') {
         incrementStat('errors')
       }
@@ -55,15 +55,15 @@ export default function AgentPanel() {
       alert('Watcher API not available. Please restart the app.')
       return
     }
-    
+
     console.log('[AGENT PANEL] Starting watcher with config:', config)
-    
+
     const result = await window.api.watcher.start(config)
-    
+
     if (result.success) {
       setConfig(config)
       setStatus('running')
-      setIsEditing(false)  // Clear editing state
+      setIsEditing(false) // Clear editing state
       console.log('[AGENT PANEL] Watcher started successfully')
     } else {
       console.error('[AGENT PANEL] Failed to start watcher:', result.error)
@@ -82,7 +82,7 @@ export default function AgentPanel() {
 
   const handlePause = async () => {
     if (!window.api?.watcher) return
-    
+
     if (status === 'paused') {
       console.log('[AGENT PANEL] Resuming watcher')
       await window.api.watcher.resume()
@@ -117,8 +117,8 @@ export default function AgentPanel() {
   // Show setup when configuring or editing
   if (status === 'idle' || status === 'configuring') {
     return (
-      <AgentSetup 
-        onStart={handleStart} 
+      <AgentSetup
+        onStart={handleStart}
         isEditing={isEditing}
         onCancel={isEditing ? handleCancelEdit : undefined}
       />
@@ -127,13 +127,7 @@ export default function AgentPanel() {
 
   // Show activity when running or paused
   if (status === 'running' || status === 'paused') {
-    return (
-      <AgentActivity
-        onStop={handleStop}
-        onPause={handlePause}
-        onEditRules={handleEditRules}
-      />
-    )
+    return <AgentActivity onStop={handleStop} onPause={handlePause} onEditRules={handleEditRules} />
   }
 
   return <AgentSetup onStart={handleStart} />

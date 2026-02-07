@@ -1,13 +1,5 @@
 import React from 'react'
-import { 
-  FolderSync, 
-  Receipt, 
-  Sparkles, 
-  HardDrive, 
-  Mail,
-  Images,
-  FileText
-} from 'lucide-react'
+import { FolderSync, Receipt, Sparkles, HardDrive, Mail, Images, FileText } from 'lucide-react'
 
 interface TaskTemplate {
   id: string
@@ -44,14 +36,16 @@ const templates: TaskTemplate[] = [
     id: 'storage',
     icon: <HardDrive className="w-3.5 h-3.5" />,
     label: 'Storage',
-    command: 'Analyze storage usage in this folder. Show me the largest files and what types are taking up space',
+    command:
+      'Analyze storage usage in this folder. Show me the largest files and what types are taking up space',
     description: 'Find large files & disk usage'
   },
   {
     id: 'categorize-images',
     icon: <Images className="w-3.5 h-3.5" />,
     label: 'Sort Images',
-    command: 'Categorize all images in this folder using AI vision and organize them into subfolders (Receipts, Screenshots, Photos, Documents, etc.)',
+    command:
+      'Categorize all images in this folder using AI vision and organize them into subfolders (Receipts, Screenshots, Photos, Documents, etc.)',
     description: 'AI-powered image sorting'
   },
   {
@@ -65,7 +59,8 @@ const templates: TaskTemplate[] = [
     id: 'gmail-expenses',
     icon: <Mail className="w-3.5 h-3.5" />,
     label: 'Gmail → Sheets',
-    command: 'Pull my receipt emails from Gmail this month, download the attachments, analyze them, and create an expense report in Google Sheets',
+    command:
+      'Pull my receipt emails from Gmail this month, download the attachments, analyze them, and create an expense report in Google Sheets',
     requiresGoogle: true,
     description: 'Full Gmail to Sheets pipeline'
   }
@@ -77,39 +72,40 @@ interface TaskTemplatesProps {
   isGoogleConnected?: boolean
 }
 
-export default function TaskTemplates({ 
-  onSelectTemplate, 
+export default function TaskTemplates({
+  onSelectTemplate,
   disabled = false,
-  isGoogleConnected = false 
+  isGoogleConnected = false
 }: TaskTemplatesProps): JSX.Element {
   return (
     <div className="flex flex-wrap gap-1.5 mb-2">
       {templates.map((template) => {
         const isDisabled = disabled || (template.requiresGoogle && !isGoogleConnected)
-        
+
         return (
           <button
             key={template.id}
             onClick={() => !isDisabled && onSelectTemplate(template.command)}
             disabled={isDisabled}
-            title={template.requiresGoogle && !isGoogleConnected 
-              ? 'Connect Google account first' 
-              : template.description}
+            title={
+              template.requiresGoogle && !isGoogleConnected
+                ? 'Connect Google account first'
+                : template.description
+            }
             className={`
               inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium
               transition-all duration-150
-              ${isDisabled 
-                ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed' 
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-slate-100 border border-slate-700 hover:border-slate-600'
+              ${
+                isDisabled
+                  ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-slate-100 border border-slate-700 hover:border-slate-600'
               }
               ${template.requiresGoogle ? 'ring-1 ring-inset ring-blue-500/20' : ''}
             `}
           >
             {template.icon}
             <span>{template.label}</span>
-            {template.requiresGoogle && (
-              <span className="text-[10px] text-blue-400">G</span>
-            )}
+            {template.requiresGoogle && <span className="text-[10px] text-blue-400">G</span>}
           </button>
         )
       })}

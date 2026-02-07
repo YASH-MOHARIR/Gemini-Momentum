@@ -105,7 +105,7 @@ export interface AgentRule {
 
 export interface AgentConfig {
   id: string
-  watchFolder: string
+  watchFolders: string[]
   rules: AgentRule[]
   enableActivityLog: boolean
   logPath: string
@@ -129,7 +129,7 @@ export interface ActivityEntry {
 export interface WatcherStatus {
   running: boolean
   paused: boolean
-  watchFolder?: string
+  watchFolders?: string[]
   rulesCount?: number
 }
 
@@ -186,13 +186,20 @@ export interface ElectronAPI {
   agent: {
     init: (apiKey: string) => Promise<{ success: boolean; error?: string }>
     isReady: () => Promise<boolean>
-    chat: (messages: ChatMessage[], grantedFolders: string[], selectedFile?: string, isDirectory?: boolean) => Promise<AgentResponse>
+    chat: (
+      messages: ChatMessage[],
+      grantedFolders: string[],
+      selectedFile?: string,
+      isDirectory?: boolean
+    ) => Promise<AgentResponse>
     test: () => Promise<{ success: boolean; error?: string }>
     getMetrics: () => Promise<SessionMetrics>
     resetMetrics: () => Promise<void>
     onStreamChunk: (callback: (chunk: string) => void) => () => void
     onStreamEnd: (callback: () => void) => () => void
-    onToolCall: (callback: (data: { name: string; args: Record<string, string> }) => void) => () => void
+    onToolCall: (
+      callback: (data: { name: string; args: Record<string, string> }) => void
+    ) => () => void
     onToolResult: (callback: (data: { name: string; result: unknown }) => void) => () => void
     onRoutingStart: (callback: () => void) => () => void
     onRoutingComplete: (callback: (classification: TaskClassification) => void) => () => void
@@ -204,13 +211,23 @@ export interface ElectronAPI {
     getUser: () => Promise<GoogleUser | null>
     signIn: () => Promise<{ success: boolean; error?: string }>
     signOut: () => Promise<{ success: boolean }>
-    createSheet: (data: { title: string; headers: string[]; rows: (string | number)[][]; sheetName?: string }) => Promise<{ success: boolean; spreadsheetUrl?: string; error?: string }>
-    searchGmail: (query: string, maxResults?: number) => Promise<{ success: boolean; emails?: unknown[]; error?: string }>
+    createSheet: (data: {
+      title: string
+      headers: string[]
+      rows: (string | number)[][]
+      sheetName?: string
+    }) => Promise<{ success: boolean; spreadsheetUrl?: string; error?: string }>
+    searchGmail: (
+      query: string,
+      maxResults?: number
+    ) => Promise<{ success: boolean; emails?: unknown[]; error?: string }>
     onSignedIn: (callback: () => void) => () => void
     onSignedOut: (callback: () => void) => () => void
   }
   watcher: {
-    start: (config: AgentConfig) => Promise<{ success: boolean; error?: string; watcherId?: string }>
+    start: (
+      config: AgentConfig
+    ) => Promise<{ success: boolean; error?: string; watcherId?: string }>
     stop: (watcherId: string) => Promise<{ success: boolean }>
     stopAll: () => Promise<{ success: boolean; count: number }>
     pause: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
@@ -220,7 +237,9 @@ export interface ElectronAPI {
     getStats: (watcherId: string) => Promise<WatcherStats | null>
     updateRules: (watcherId: string, rules: AgentRule[]) => Promise<{ success: boolean }>
     onReady: (callback: (watcherId: string) => void) => () => void
-    onFileDetected: (callback: (watcherId: string, data: { path: string; name: string }) => void) => () => void
+    onFileDetected: (
+      callback: (watcherId: string, data: { path: string; name: string }) => void
+    ) => () => void
     onFileProcessed: (callback: (watcherId: string, entry: ActivityEntry) => void) => () => void
     onError: (callback: (watcherId: string, error: string) => void) => () => void
     onAllStopped: (callback: () => void) => () => void
@@ -403,7 +422,9 @@ const api: ElectronAPI = {
 
   // ============ File Watcher / Agent Mode ============
   watcher: {
-    start: (config: AgentConfig): Promise<{ success: boolean; error?: string; watcherId?: string }> =>
+    start: (
+      config: AgentConfig
+    ): Promise<{ success: boolean; error?: string; watcherId?: string }> =>
       ipcRenderer.invoke('watcher:start', config),
     stop: (watcherId: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('watcher:stop', watcherId),
@@ -415,8 +436,7 @@ const api: ElectronAPI = {
       ipcRenderer.invoke('watcher:resume', watcherId),
     getStatus: (watcherId?: string): Promise<WatcherStatus> =>
       ipcRenderer.invoke('watcher:get-status', watcherId),
-    getAll: (): Promise<AgentConfig[]> =>
-      ipcRenderer.invoke('watcher:get-all'),
+    getAll: (): Promise<AgentConfig[]> => ipcRenderer.invoke('watcher:get-all'),
     getStats: (watcherId: string): Promise<WatcherStats | null> =>
       ipcRenderer.invoke('watcher:get-stats', watcherId),
     updateRules: (watcherId: string, rules: AgentRule[]): Promise<{ success: boolean }> =>
@@ -428,13 +448,17 @@ const api: ElectronAPI = {
       ipcRenderer.on('watcher:ready', handler)
       return () => ipcRenderer.removeListener('watcher:ready', handler)
     },
-    onFileDetected: (callback: (watcherId: string, data: { path: string; name: string }) => void) => {
-      const handler = (_: unknown, watcherId: string, data: { path: string; name: string }) => callback(watcherId, data)
+    onFileDetected: (
+      callback: (watcherId: string, data: { path: string; name: string }) => void
+    ) => {
+      const handler = (_: unknown, watcherId: string, data: { path: string; name: string }) =>
+        callback(watcherId, data)
       ipcRenderer.on('watcher:file-detected', handler)
       return () => ipcRenderer.removeListener('watcher:file-detected', handler)
     },
     onFileProcessed: (callback: (watcherId: string, entry: ActivityEntry) => void) => {
-      const handler = (_: unknown, watcherId: string, entry: ActivityEntry) => callback(watcherId, entry)
+      const handler = (_: unknown, watcherId: string, entry: ActivityEntry) =>
+        callback(watcherId, entry)
       ipcRenderer.on('watcher:file-processed', handler)
       return () => ipcRenderer.removeListener('watcher:file-processed', handler)
     },
@@ -452,8 +476,7 @@ const api: ElectronAPI = {
 
   // Config API
   config: {
-    getApiKeys: (): Promise<{ hasGeminiKey: boolean }> =>
-      ipcRenderer.invoke('config:get-api-keys'),
+    getApiKeys: (): Promise<{ hasGeminiKey: boolean }> => ipcRenderer.invoke('config:get-api-keys'),
     saveApiKeys: (keys: { geminiKey: string }): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('config:save-api-keys', keys)
   }

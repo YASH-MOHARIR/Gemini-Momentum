@@ -54,7 +54,8 @@ Use this to analyze document contents, read data files, or view code.`,
   },
   {
     name: 'delete_file',
-    description: 'Queue a file or folder for deletion. The deletion is NOT immediate - it will be added to the Review panel where the user must approve it before the file is actually deleted. This ensures user safety.',
+    description:
+      'Queue a file or folder for deletion. The deletion is NOT immediate - it will be added to the Review panel where the user must approve it before the file is actually deleted. This ensures user safety.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -130,7 +131,8 @@ Use this when user asks about:
         },
         depth: {
           type: 'NUMBER',
-          description: 'How many subfolders deep to scan (1-5, default 3). Higher = more thorough but slower.'
+          description:
+            'How many subfolders deep to scan (1-5, default 3). Higher = more thorough but slower.'
         }
       },
       required: ['path']
@@ -285,7 +287,8 @@ Use this for batch processing receipts, invoices, or any expense-related images.
         },
         category_hint: {
           type: 'STRING',
-          description: 'Optional hint for categorization (e.g., "business travel", "office supplies")'
+          description:
+            'Optional hint for categorization (e.g., "business travel", "office supplies")'
         }
       },
       required: ['folder_path', 'output_path']
@@ -311,7 +314,8 @@ Example results:
         },
         naming_style: {
           type: 'STRING',
-          description: 'Optional style: "receipt" (date_vendor_amount), "descriptive" (content-based), "dated" (date_originalname). Default: auto-detect'
+          description:
+            'Optional style: "receipt" (date_vendor_amount), "descriptive" (content-based), "dated" (date_originalname). Default: auto-detect'
         }
       },
       required: ['path']
@@ -356,8 +360,14 @@ Use this when user asks to "put in Google Sheets", "upload to Sheets", "create a
       type: 'OBJECT',
       properties: {
         title: { type: 'STRING', description: 'Title for the Google Sheet' },
-        headers: { type: 'STRING', description: 'JSON array of column headers. Example: ["Name", "Date", "Amount"]' },
-        rows: { type: 'STRING', description: 'JSON array of row arrays. Example: [["Item 1", "2024-01-15", 100]]' },
+        headers: {
+          type: 'STRING',
+          description: 'JSON array of column headers. Example: ["Name", "Date", "Amount"]'
+        },
+        rows: {
+          type: 'STRING',
+          description: 'JSON array of row arrays. Example: [["Item 1", "2024-01-15", 100]]'
+        },
         sheet_name: { type: 'STRING', description: 'Optional worksheet name (default: Sheet1)' }
       },
       required: ['title', 'headers', 'rows']
@@ -372,7 +382,11 @@ Requires: User must be signed into Google.`,
       type: 'OBJECT',
       properties: {
         title: { type: 'STRING', description: 'Title for the expense report' },
-        expenses: { type: 'STRING', description: 'JSON array of expense objects. Each: {"vendor": "Store", "date": "2024-01-15", "category": "Food", "description": "Lunch", "amount": 25.50}' }
+        expenses: {
+          type: 'STRING',
+          description:
+            'JSON array of expense objects. Each: {"vendor": "Store", "date": "2024-01-15", "category": "Food", "description": "Lunch", "amount": 25.50}'
+        }
       },
       required: ['title', 'expenses']
     }
@@ -385,7 +399,11 @@ Requires: User must be signed into Google.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        query: { type: 'STRING', description: 'Gmail search query. Examples: "from:amazon receipt", "invoice after:2024/01/01"' },
+        query: {
+          type: 'STRING',
+          description:
+            'Gmail search query. Examples: "from:amazon receipt", "invoice after:2024/01/01"'
+        },
         max_results: { type: 'STRING', description: 'Maximum emails to return (default: 20)' }
       },
       required: ['query']
@@ -414,9 +432,15 @@ Requires: User must be signed into Google.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        gmail_query: { type: 'STRING', description: 'Gmail search query (e.g., "after:2024/01/01")' },
+        gmail_query: {
+          type: 'STRING',
+          description: 'Gmail search query (e.g., "after:2024/01/01")'
+        },
         report_title: { type: 'STRING', description: 'Title for the expense report' },
-        category_hint: { type: 'STRING', description: 'Optional category hint (e.g., "business travel")' }
+        category_hint: {
+          type: 'STRING',
+          description: 'Optional category hint (e.g., "business travel")'
+        }
       },
       required: ['gmail_query', 'report_title']
     }

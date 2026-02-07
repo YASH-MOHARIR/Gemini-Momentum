@@ -37,7 +37,11 @@ interface GoogleUserInfo {
 export function initializeGoogleAuth(id: string, secret: string): void {
   clientId = id
   clientSecret = secret
-  oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:3847/oauth2callback')
+  oauth2Client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    'http://localhost:3847/oauth2callback'
+  )
   console.log('[GOOGLE AUTH] Initialized')
   loadStoredTokens()
 }
@@ -102,9 +106,14 @@ export async function getUserInfo(): Promise<GoogleUserInfo | null> {
   }
 }
 
-export async function signIn(mainWindow: BrowserWindow | null): Promise<{ success: boolean; error?: string }> {
+export async function signIn(
+  mainWindow: BrowserWindow | null
+): Promise<{ success: boolean; error?: string }> {
   if (!oauth2Client || !clientId || !clientSecret) {
-    return { success: false, error: 'Google Auth not initialized. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env' }
+    return {
+      success: false,
+      error: 'Google Auth not initialized. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env'
+    }
   }
 
   return new Promise((resolve) => {

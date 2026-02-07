@@ -184,7 +184,16 @@ function App(): ReactElement {
   const [needsSetup, setNeedsSetup] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { mode: agentMode, status: agentStatus, setMode, folderSelectMode, completeFolderSelect } = useAgentStore()
+  const {
+    mode: agentMode,
+    status: agentStatus,
+    setMode,
+    folderSelectMode,
+    completeFolderSelect,
+    watchers,
+    selectingForWatcherId,
+    cancelFolderSelect
+  } = useAgentStore()
   const isAgentMode = agentMode === 'agent'
 
   const {
@@ -194,6 +203,9 @@ function App(): ReactElement {
     setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask, setStorageAnalysis,
     hideBeforeAfter, selectAll, clearSelection, getSelectedCount, getSelectedFiles
   } = useAppStore()
+
+  const activeWatcher = selectingForWatcherId ? watchers.get(selectingForWatcherId) : undefined
+  const activeFolderPaths = activeWatcher?.config.watchFolders || []
 
   // Check if setup is needed on mount
   useEffect(() => {
@@ -281,14 +293,24 @@ function App(): ReactElement {
       // Delete: Delete selected files (if any selected)
       if (e.key === 'Delete' && !isAgentMode && getSelectedCount() > 0) {
         e.preventDefault()
-        // TODO: Implement batch delete in Phase 3
-        console.log('Delete key pressed, selected files:', getSelectedFiles())
+        const files = getSelectedFiles()
+        // Queue deletion using the same API as SelectionActionBar
+        window.api.pending.queueMultiple(files, 'Batch delete (keyboard shortcut)')
+          .then(() => {
+            clearSelection()
+            // Switch to review tab to show the queued items
+            setActiveTab('review')
+          })
+          .catch(err => console.error('Failed to queue deletions via keyboard:', err))
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [folders, isAgentMode, selectAll, clearSelection, getSelectedCount, getSelectedFiles])
+
+  // Google sign-in/sign-out event listeners
+  useEffect(() => {
     const unsubSignedIn = window.api.google.onSignedIn(() => setIsGoogleConnected(true))
     const unsubSignedOut = window.api.google.onSignedOut(() => setIsGoogleConnected(false))
     return () => { unsubSignedIn(); unsubSignedOut() }
@@ -397,7 +419,17 @@ function App(): ReactElement {
     try {
       const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map((m) => ({ role: m.role, content: m.content }))
       const grantedFolders = folders.map((f) => f.path)
-      const response = await window.api.agent.chat(chatHistory, grantedFolders, selectedFile?.path)
+      const selectedFiles = getSelectedFiles()
+      const response = await window.api.agent.chat(
+        chatHistory,
+        grantedFolders,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (selectedFiles.length > 0
+          ? selectedFiles
+          : selectedFile
+            ? [selectedFile.path]
+            : undefined) as any
+      )
       setIsStreaming(false)
       setStreamingContent('')
       if (response.error) {
@@ -517,6 +549,7 @@ function App(): ReactElement {
                   selectedPath={selectedFile?.path}
                   onFolderClick={isSelectingFolder ? handleFolderClickForAgent : undefined}
                   highlightFolders={isSelectingFolder}
+                  activePaths={isSelectingFolder ? activeFolderPaths : undefined}
                 />
               </div>
             ))}
@@ -541,6 +574,21 @@ function App(): ReactElement {
               </div>
             </div>
           )}
+
+          <div className="p-2 border-t border-slate-700/50 text-center">
+            {isSelectingFolder ? (
+              <button
+                onClick={cancelFolderSelect}
+                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-medium transition-colors"
+              >
+                Done
+              </button>
+            ) : (
+              <p className="text-[10px] text-slate-500">
+                Hold <kbd className="font-sans px-1 bg-slate-800 rounded text-slate-400">Ctrl</kbd> to multi-select
+              </p>
+            )}
+          </div>
         </aside>
 
         {/* Main Content Area */}
@@ -619,7 +667,7 @@ function App(): ReactElement {
                   <div className="bg-slate-800 rounded-lg border border-slate-700 flex items-center">
                     <input
                       type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleKeyDown}
-                      placeholder={hasAnyFolder ? (selectedFile ? `Ask about ${selectedFile.name}...` : 'Ask Momentum to organize files, extract data, create reports...') : 'Select a folder to get started...'}
+                      placeholder={hasAnyFolder ? (getSelectedCount() > 0 ? `Ask about ${getSelectedCount()} selected files...` : (selectedFile ? `Ask about ${selectedFile.name}...` : 'Ask Momentum to organize files, extract data, create reports...')) : 'Select a folder to get started...'}
                       disabled={!hasAnyFolder || isProcessing}
                       className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
                     />

@@ -46,11 +46,7 @@ export default function MetricsPanel() {
   }, [])
 
   if (!metrics) {
-    return (
-      <div className="p-4 text-center text-slate-500 text-sm">
-        Loading metrics...
-      </div>
-    )
+    return <div className="p-4 text-center text-slate-500 text-sm">Loading metrics...</div>
   }
 
   const totalTasks = Object.values(metrics.modelUsage).reduce((a, b) => a + b, 0)

@@ -12,7 +12,7 @@ export interface AgentRule {
 export interface AgentConfig {
   id: string
   name?: string
-  watchFolder: string
+  watchFolders: string[]
   rules: AgentRule[]
   enableActivityLog: boolean
   logPath: string
@@ -84,7 +84,11 @@ export interface AgentState {
   setActiveWatcher: (watcherId: string | null) => void
 
   // Actions - Folder selection
-  startFolderSelect: (mode: FolderSelectMode, watcherId?: string, field?: 'watch' | 'destination') => void
+  startFolderSelect: (
+    mode: FolderSelectMode,
+    watcherId?: string,
+    field?: 'watch' | 'destination'
+  ) => void
   completeFolderSelect: (folderPath: string) => void
   cancelFolderSelect: () => void
 
@@ -125,7 +129,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     }
 
     const newWatcher: WatcherState = {
-      config,
+      config: {
+        ...config,
+        watchFolders: config.watchFolders || []
+      },
       status: 'idle',
       stats: {
         filesProcessed: 0,
@@ -179,18 +186,19 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     newWatchers.set(watcherId, {
       ...watcher,
       status,
-      stats: status === 'running' && watcher.status !== 'running'
-        ? { ...watcher.stats, startTime: Date.now() }
-        : watcher.stats
+      stats:
+        status === 'running' && watcher.status !== 'running'
+          ? { ...watcher.stats, startTime: Date.now() }
+          : watcher.stats
     })
 
     set({ watchers: newWatchers })
 
     // Update overall status
-    const allStatuses = Array.from(newWatchers.values()).map(w => w.status)
-    if (allStatuses.some(s => s === 'running')) {
+    const allStatuses = Array.from(newWatchers.values()).map((w) => w.status)
+    if (allStatuses.some((s) => s === 'running')) {
       set({ status: 'running' })
-    } else if (allStatuses.some(s => s === 'paused')) {
+    } else if (allStatuses.some((s) => s === 'paused')) {
       set({ status: 'paused' })
     } else {
       set({ status: 'idle' })
@@ -269,20 +277,29 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   completeFolderSelect: (folderPath) => {
-    const { pendingFolderSelect } = get()
+    const { pendingFolderSelect, watchers } = get()
 
     if (pendingFolderSelect?.watcherId) {
+      const watcher = watchers.get(pendingFolderSelect.watcherId)
+      if (!watcher) return
+
       if (pendingFolderSelect.field === 'watch') {
+        const currentFolders = watcher.config.watchFolders || []
+        let newFolders: string[]
+
+        if (currentFolders.includes(folderPath)) {
+          // Remove if already selected (toggle)
+          newFolders = currentFolders.filter((f) => f !== folderPath)
+        } else {
+          // Add if not selected
+          newFolders = [...currentFolders, folderPath]
+        }
+
         get().updateWatcherConfig(pendingFolderSelect.watcherId, {
-          watchFolder: folderPath
+          watchFolders: newFolders
         })
       }
     }
-
-    set({
-      folderSelectMode: 'none',
-      pendingFolderSelect: null
-    })
   },
 
   cancelFolderSelect: () => {
