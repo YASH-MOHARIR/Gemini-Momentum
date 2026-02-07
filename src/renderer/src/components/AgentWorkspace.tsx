@@ -22,7 +22,9 @@ import {
   Camera,
   Receipt,
   FileText,
-  Sparkles
+  Sparkles,
+  Orbit,
+  Pencil
 } from 'lucide-react'
 import { useAgentStore, AgentConfig, AgentRule, ActivityEntry } from '../stores/agentStore'
 
@@ -31,11 +33,11 @@ const MAX_CHARS = 200
 const MAX_WATCHERS = 5
 
 const EXAMPLE_RULES = [
-  "PDFs go to Documents folder",
-  "Receipts to Expenses, rename with date and vendor",
-  "Screenshots to Screenshots folder",
-  "Images to Pictures folder",
-  "Code files to Code folder"
+  'PDFs go to Documents folder',
+  'Receipts to Expenses, rename with date and vendor',
+  'Screenshots to Screenshots folder',
+  'Images to Pictures folder',
+  'Code files to Code folder'
 ]
 
 interface WatcherTemplate {
@@ -83,10 +85,7 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     description: 'Keep desktop clean',
     color: 'bg-purple-600 hover:bg-purple-500',
     defaultFolder: 'Desktop',
-    rules: [
-      'Screenshots to Screenshots folder',
-      'Screen recordings to Recordings folder'
-    ]
+    rules: ['Screenshots to Screenshots folder', 'Screen recordings to Recordings folder']
   },
   {
     id: 'documents',
@@ -129,12 +128,24 @@ function getFolderName(path: string): string {
 
 function ActivityItem({ entry }: { entry: ActivityEntry }) {
   const statusConfig = {
-    moved: { icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-900/20 border-emerald-800/30' },
-    renamed: { icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-900/20 border-emerald-800/30' },
-    skipped: { icon: MinusCircle, color: 'text-slate-400', bg: 'bg-slate-800/50 border-slate-700/30' },
+    moved: {
+      icon: CheckCircle,
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-900/20 border-emerald-800/30'
+    },
+    renamed: {
+      icon: CheckCircle,
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-900/20 border-emerald-800/30'
+    },
+    skipped: {
+      icon: MinusCircle,
+      color: 'text-slate-400',
+      bg: 'bg-slate-800/50 border-slate-700/30'
+    },
     error: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-900/20 border-red-800/30' }
   }
-  
+
   const config = statusConfig[entry.action]
   const Icon = config.icon
 
@@ -149,7 +160,9 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
           {entry.action === 'moved' && entry.destination && (
             <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
               <ArrowRight className="w-3 h-3" />
-              <span className="truncate">{entry.destination.split(/[/\\]/).slice(-2).join('/')}</span>
+              <span className="truncate">
+                {entry.destination.split(/[/\\]/).slice(-2).join('/')}
+              </span>
             </div>
           )}
           {entry.newName && entry.newName !== entry.originalName && (
@@ -157,9 +170,7 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
               → {entry.newName}
             </div>
           )}
-          {entry.error && (
-            <div className="text-xs text-red-400/80 mt-0.5">{entry.error}</div>
-          )}
+          {entry.error && <div className="text-xs text-red-400/80 mt-0.5">{entry.error}</div>}
           <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
             {entry.matchedRule && <span>Rule #{entry.matchedRule}</span>}
             {entry.usedAI && (
@@ -175,7 +186,11 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
   )
 }
 
-function TemplateSelector({ onSelectTemplate }: { onSelectTemplate: (template: WatcherTemplate) => void }) {
+function TemplateSelector({
+  onSelectTemplate
+}: {
+  onSelectTemplate: (template: WatcherTemplate) => void
+}) {
   return (
     <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -183,7 +198,8 @@ function TemplateSelector({ onSelectTemplate }: { onSelectTemplate: (template: W
         <h3 className="text-sm font-medium text-slate-200">Quick Start Templates</h3>
       </div>
       <p className="text-xs text-slate-500 mb-4">
-        Choose a template to get started quickly, or create a custom watcher
+        Choose a template to get started quickly, or create a custom Orbit. Each template includes
+        pre-configured rules for common use cases.
       </p>
       <div className="grid grid-cols-2 gap-2">
         {WATCHER_TEMPLATES.map((template) => (
@@ -224,11 +240,15 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
 
   const [isExpanded, setIsExpanded] = useState(status === 'running' || status === 'idle')
   const [isEditing, setIsEditing] = useState(status === 'idle' && !config.watchFolder)
+  const [isEditingName, setIsEditingName] = useState(false)
   const [localRules, setLocalRules] = useState<AgentRule[]>(
     config.rules.length > 0 ? config.rules : [{ id: '1', text: '', enabled: true, order: 1 }]
   )
   const [localWatchFolder, setLocalWatchFolder] = useState(config.watchFolder)
-  const [enableLog, setEnableLog] = useState(config.enableActivityLog !== undefined ? config.enableActivityLog : true)
+  const [localName, setLocalName] = useState(config.name || '')
+  const [enableLog, setEnableLog] = useState(
+    config.enableActivityLog !== undefined ? config.enableActivityLog : true
+  )
   const [duration, setDuration] = useState(0)
 
   const isRunning = status === 'running' || status === 'paused'
@@ -266,9 +286,12 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   }, [watcherId])
 
   const handleStart = async () => {
-    const activeRules = localRules.filter(r => r.text.trim())
-    const logPath = localWatchFolder + (localWatchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
-    
+    const activeRules = localRules.filter((r) => r.text.trim())
+    const logPath =
+      localWatchFolder +
+      (localWatchFolder.includes('/') ? '/' : '\\') +
+      'momentum_activity_log.xlsx'
+
     const startConfig: AgentConfig = {
       id: watcherId,
       watchFolder: localWatchFolder,
@@ -276,7 +299,7 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
       enableActivityLog: enableLog,
       logPath: enableLog ? logPath : ''
     }
-    
+
     const result = await window.api.watcher.start(startConfig)
     if (result.success) {
       updateWatcherConfig(watcherId, startConfig)
@@ -305,7 +328,7 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   }
 
   const handleDelete = async () => {
-    if (confirm(`Delete this watcher for ${getFolderName(config.watchFolder)}?`)) {
+    if (confirm(`Delete this Orbit for ${getFolderName(config.watchFolder)}?`)) {
       if (isRunning) {
         await window.api.watcher.stop(watcherId)
       }
@@ -314,10 +337,14 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   }
 
   const handleSaveConfig = () => {
-    const activeRules = localRules.filter(r => r.text.trim())
-    const logPath = localWatchFolder + (localWatchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
-    
+    const activeRules = localRules.filter((r) => r.text.trim())
+    const logPath =
+      localWatchFolder +
+      (localWatchFolder.includes('/') ? '/' : '\\') +
+      'momentum_activity_log.xlsx'
+
     updateWatcherConfig(watcherId, {
+      name: localName.trim() || undefined,
       watchFolder: localWatchFolder,
       rules: activeRules,
       enableActivityLog: enableLog,
@@ -328,23 +355,26 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
 
   const addRule = () => {
     if (localRules.length >= MAX_RULES) return
-    setLocalRules([...localRules, {
-      id: Date.now().toString(),
-      text: '',
-      enabled: true,
-      order: localRules.length + 1
-    }])
+    setLocalRules([
+      ...localRules,
+      {
+        id: Date.now().toString(),
+        text: '',
+        enabled: true,
+        order: localRules.length + 1
+      }
+    ])
   }
 
   const updateRuleText = (id: string, text: string) => {
-    setLocalRules(localRules.map(r => 
-      r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r
-    ))
+    setLocalRules(
+      localRules.map((r) => (r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r))
+    )
   }
 
   const removeRule = (id: string) => {
     if (localRules.length <= 1) return
-    setLocalRules(localRules.filter(r => r.id !== id))
+    setLocalRules(localRules.filter((r) => r.id !== id))
   }
 
   const handleBrowseFolder = async () => {
@@ -356,43 +386,92 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   }
 
   const useExample = (index: number) => {
-    const emptyRule = localRules.find(r => !r.text.trim())
+    const emptyRule = localRules.find((r) => !r.text.trim())
     if (emptyRule) {
       updateRuleText(emptyRule.id, EXAMPLE_RULES[index])
     } else if (localRules.length < MAX_RULES) {
-      setLocalRules([...localRules, {
-        id: Date.now().toString(),
-        text: EXAMPLE_RULES[index],
-        enabled: true,
-        order: localRules.length + 1
-      }])
+      setLocalRules([
+        ...localRules,
+        {
+          id: Date.now().toString(),
+          text: EXAMPLE_RULES[index],
+          enabled: true,
+          order: localRules.length + 1
+        }
+      ])
     }
   }
 
-  const canStart = localWatchFolder && localRules.some(r => r.text.trim())
+  const canStart = localWatchFolder && localRules.some((r) => r.text.trim())
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-      <div 
-        className="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-700/30 transition-colors"
+      <div
+        className="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-700/30 transition-colors group"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <button className="text-slate-400 hover:text-slate-200">
           {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
         <FolderOpen className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-slate-200 truncate">
-            {localWatchFolder ? getFolderName(localWatchFolder) : 'New Watcher'}
-          </div>
-          <div className="text-xs text-slate-500">
-            {config.rules.filter(r => r.text.trim()).length} rule{config.rules.filter(r => r.text.trim()).length !== 1 ? 's' : ''}
+        <div
+          className="flex-1 min-w-0 flex items-center gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex-1 min-w-0">
+            {isEditingName ? (
+              <input
+                type="text"
+                value={localName}
+                onChange={(e) => setLocalName(e.target.value)}
+                onBlur={() => {
+                  setIsEditingName(false)
+                  updateWatcherConfig(watcherId, { name: localName.trim() || undefined })
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setIsEditingName(false)
+                    updateWatcherConfig(watcherId, { name: localName.trim() || undefined })
+                  }
+                  if (e.key === 'Escape') {
+                    setLocalName(config.name || '')
+                    setIsEditingName(false)
+                  }
+                }}
+                placeholder={localWatchFolder ? getFolderName(localWatchFolder) : 'Orbit Name'}
+                autoFocus
+                className="w-full px-2 py-0.5 bg-slate-900 border border-emerald-500 rounded text-sm font-medium text-slate-200 placeholder-slate-500 focus:outline-none"
+              />
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="text-sm font-medium text-slate-200 truncate cursor-text hover:text-emerald-300 transition-colors"
+                  onClick={() => setIsEditingName(true)}
+                  title="Click to edit name"
+                >
+                  {localName || (localWatchFolder ? getFolderName(localWatchFolder) : 'New Orbit')}
+                </div>
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-slate-600 rounded transition-all"
+                  title="Edit name"
+                >
+                  <Pencil className="w-3 h-3 text-slate-400 hover:text-emerald-400" />
+                </button>
+              </div>
+            )}
+            <div className="text-xs text-slate-500">
+              {config.rules.filter((r) => r.text.trim()).length} rule
+              {config.rules.filter((r) => r.text.trim()).length !== 1 ? 's' : ''}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {isRunning && (
             <>
-              <span className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+              <span
+                className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`}
+              />
               <span className="text-xs text-slate-400">{isPaused ? 'Paused' : 'Running'}</span>
             </>
           )}
@@ -401,22 +480,43 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           {!isRunning ? (
             <>
-              <button onClick={handleStart} disabled={!canStart} className="p-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white transition-colors" title="Start">
+              <button
+                onClick={handleStart}
+                disabled={!canStart}
+                className="p-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white transition-colors"
+                title="Start"
+              >
                 <Play className="w-4 h-4" />
               </button>
-              <button onClick={() => setIsEditing(!isEditing)} className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors" title="Edit">
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
+                title="Edit"
+              >
                 <Settings className="w-4 h-4" />
               </button>
-              <button onClick={handleDelete} className="p-1.5 rounded-md hover:bg-red-900/30 text-slate-400 hover:text-red-400 transition-colors" title="Delete">
+              <button
+                onClick={handleDelete}
+                className="p-1.5 rounded-md hover:bg-red-900/30 text-slate-400 hover:text-red-400 transition-colors"
+                title="Delete"
+              >
                 <Trash2 className="w-4 h-4" />
               </button>
             </>
           ) : (
             <>
-              <button onClick={handlePause} className={`p-1.5 rounded-md transition-colors ${isPaused ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-amber-600 hover:bg-amber-500 text-white'}`} title={isPaused ? 'Resume' : 'Pause'}>
+              <button
+                onClick={handlePause}
+                className={`p-1.5 rounded-md transition-colors ${isPaused ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+                title={isPaused ? 'Resume' : 'Pause'}
+              >
                 <Pause className="w-4 h-4" />
               </button>
-              <button onClick={handleStop} className="p-1.5 rounded-md bg-red-600 hover:bg-red-500 text-white transition-colors" title="Stop">
+              <button
+                onClick={handleStop}
+                className="p-1.5 rounded-md bg-red-600 hover:bg-red-500 text-white transition-colors"
+                title="Stop"
+              >
                 <Square className="w-4 h-4" />
               </button>
             </>
@@ -448,68 +548,177 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
           )}
 
           {isEditing && !isRunning && (
-            <div className="p-3 space-y-3 bg-slate-900/30">
+            <div className="p-3 bg-slate-900/30">
               {!localWatchFolder && (
-                <div className="p-2 bg-emerald-900/20 border border-emerald-800/30 rounded text-xs text-emerald-300">
-                  <strong>Getting Started:</strong> Select a folder to watch, add rules, then click Start.
+                <div className="p-2 mb-3 bg-emerald-900/20 border border-emerald-800/30 rounded text-xs text-emerald-300">
+                  <strong>Getting Started:</strong> Select a folder to watch, add rules, then click
+                  Start.
                 </div>
               )}
-              
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-400">Watch Folder</label>
-                <div className="flex gap-2">
-                  <div className="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 truncate" title={localWatchFolder}>
-                    {localWatchFolder || 'No folder selected'}
-                  </div>
-                  <button onClick={() => startFolderSelect('watch', watcherId)} className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded transition-colors flex items-center gap-1" title="Click a folder in the sidebar">
-                    <MousePointer className="w-3 h-3" />Click
-                  </button>
-                  <button onClick={handleBrowseFolder} className="px-2 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded transition-colors">Browse</button>
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-400">Rules ({localRules.filter(r => r.text.trim()).length}/{MAX_RULES})</label>
-                {localRules.map((rule, index) => (
-                  <div key={rule.id} className="flex items-start gap-2">
-                    <div className="pt-1 text-xs font-medium text-slate-500 w-4">{index + 1}.</div>
-                    <textarea value={rule.text} onChange={(e) => updateRuleText(rule.id, e.target.value)} placeholder="Describe what should happen..." rows={1} className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-emerald-500" />
-                    {localRules.length > 1 && (
-                      <button onClick={() => removeRule(rule.id)} className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors">
-                        <X className="w-3 h-3" />
+              {/* 2-Column Layout: 30% Folder | 70% Rules */}
+              <div className="flex gap-3">
+                {/* Left Column - Folder Selector (30%) */}
+                <div className="w-[30%] space-y-3">
+                  <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                    <label className="text-xs font-medium text-slate-400 mb-2 block">
+                      Watch Folder
+                    </label>
+                    <div className="space-y-2">
+                      <div
+                        className="px-3 py-2 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 min-h-[60px] flex items-center justify-center"
+                        title={localWatchFolder}
+                      >
+                        {localWatchFolder ? (
+                          <div className="text-center">
+                            <FolderOpen className="w-8 h-8 text-emerald-400 mx-auto mb-1" />
+                            <div className="font-medium truncate">
+                              {getFolderName(localWatchFolder)}
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {localWatchFolder}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center text-slate-500">
+                            <Folder className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                            <div className="text-[10px]">No folder selected</div>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => startFolderSelect('watch', watcherId, 'watch')}
+                        className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <MousePointer className="w-3.5 h-3.5" />
+                        Click Folder in Sidebar
                       </button>
-                    )}
+                      <button
+                        onClick={handleBrowseFolder}
+                        className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded transition-colors"
+                      >
+                        Browse Files
+                      </button>
+                    </div>
                   </div>
-                ))}
-                {localRules.length < MAX_RULES && (
-                  <button onClick={addRule} className="flex items-center gap-1 px-2 py-1 w-full rounded border border-dashed border-slate-600 text-slate-400 hover:text-emerald-400 hover:border-emerald-600 transition-colors text-xs">
-                    <Plus className="w-3 h-3" />Add Rule
-                  </button>
-                )}
-              </div>
 
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-xs text-slate-500">
-                  <Lightbulb className="w-3 h-3 text-amber-500" /><span>Quick add examples:</span>
+                  {/* Activity Log Toggle */}
+                  <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        id={`enableLog-${watcherId}`}
+                        checked={enableLog}
+                        onChange={(e) => setEnableLog(e.target.checked)}
+                        className="mt-0.5 w-3.5 h-3.5 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <label
+                        htmlFor={`enableLog-${watcherId}`}
+                        className="text-xs text-slate-300 leading-tight"
+                      >
+                        Save activity log
+                        <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                          Creates an Excel file in the watch folder with all file operations: moves,
+                          renames, AI decisions, and timestamps. Perfect for tracking what your
+                          Orbit does.
+                        </div>
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {EXAMPLE_RULES.map((example, i) => (
-                    <button key={i} onClick={() => useExample(i)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-slate-200 text-xs rounded transition-colors">
-                      {example.length > 20 ? example.slice(0, 20) + '...' : example}
-                    </button>
-                  ))}
+
+                {/* Right Column - Rules (70%) */}
+                <div className="flex-1 space-y-3">
+                  <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-slate-400">
+                        Rules ({localRules.filter((r) => r.text.trim()).length}/{MAX_RULES})
+                      </label>
+                      {localRules.length < MAX_RULES && (
+                        <button
+                          onClick={addRule}
+                          className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-emerald-400 transition-colors text-xs"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add Rule
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {localRules.map((rule, index) => (
+                        <div key={rule.id} className="flex items-start gap-2">
+                          <div className="pt-2 text-xs font-medium text-slate-500 w-5">
+                            {index + 1}.
+                          </div>
+                          <textarea
+                            value={rule.text}
+                            onChange={(e) => updateRuleText(rule.id, e.target.value)}
+                            placeholder="Describe what should happen to files..."
+                            rows={2}
+                            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                          />
+                          {localRules.length > 1 && (
+                            <button
+                              onClick={() => removeRule(rule.id)}
+                              className="p-1.5 mt-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Example Rules */}
+                  <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="text-xs font-medium text-slate-400">Quick Examples</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {EXAMPLE_RULES.map((example, i) => (
+                        <button
+                          key={i}
+                          onClick={() => useExample(i)}
+                          className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-slate-200 text-[10px] rounded transition-colors"
+                        >
+                          {example.length > 25 ? example.slice(0, 25) + '...' : example}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 py-1">
-                <input type="checkbox" id={`enableLog-${watcherId}`} checked={enableLog} onChange={(e) => setEnableLog(e.target.checked)} className="w-3 h-3 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500" />
-                <label htmlFor={`enableLog-${watcherId}`} className="text-xs text-slate-300">Save activity log (Excel in watch folder)</label>
-              </div>
-
-              <div className="flex gap-2">
-                <button onClick={handleSaveConfig} disabled={!canStart} className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm rounded transition-colors">Save Configuration</button>
+              {/* Action Buttons */}
+              <div className="flex gap-2 mt-3 pt-3 border-t border-slate-700">
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={!canStart}
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-medium rounded transition-colors"
+                >
+                  Save Configuration
+                </button>
                 {config.watchFolder && (
-                  <button onClick={() => { setLocalRules(config.rules.length > 0 ? config.rules : [{ id: '1', text: '', enabled: true, order: 1 }]); setLocalWatchFolder(config.watchFolder); setEnableLog(config.enableActivityLog !== undefined ? config.enableActivityLog : true); setIsEditing(false) }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded transition-colors">Cancel</button>
+                  <button
+                    onClick={() => {
+                      setLocalRules(
+                        config.rules.length > 0
+                          ? config.rules
+                          : [{ id: '1', text: '', enabled: true, order: 1 }]
+                      )
+                      setLocalWatchFolder(config.watchFolder)
+                      setEnableLog(
+                        config.enableActivityLog !== undefined ? config.enableActivityLog : true
+                      )
+                      setIsEditing(false)
+                    }}
+                    className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
                 )}
               </div>
             </div>
@@ -520,7 +729,9 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
               {recentActivity.length === 0 ? (
                 <div className="text-center py-4 text-xs text-slate-500">Waiting for files...</div>
               ) : (
-                recentActivity.slice(0, 10).map((entry) => <ActivityItem key={entry.id} entry={entry} />)
+                recentActivity
+                  .slice(0, 10)
+                  .map((entry) => <ActivityItem key={entry.id} entry={entry} />)
               )}
             </div>
           )}
@@ -531,7 +742,14 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
 }
 
 export default function AgentWorkspace() {
-  const { watchers, createWatcher, canAddWatcher, folderSelectMode, cancelFolderSelect, updateWatcherConfig } = useAgentStore()
+  const {
+    watchers,
+    createWatcher,
+    canAddWatcher,
+    folderSelectMode,
+    cancelFolderSelect,
+    updateWatcherConfig
+  } = useAgentStore()
 
   const watcherIds = Array.from(watchers.keys())
   const isSelectingFolder = folderSelectMode !== 'none'
@@ -566,10 +784,10 @@ export default function AgentWorkspace() {
       enableActivityLog: true,
       logPath: ''
     }
-    
+
     createWatcher(newConfig)
     setShowTemplates(false)
-    
+
     const folder = await window.api.selectFolder()
     if (folder) {
       const logPath = folder + (folder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
@@ -583,9 +801,16 @@ export default function AgentWorkspace() {
         <div className="bg-emerald-600 text-white px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <MousePointer className="w-4 h-4" />
-            <span className="font-medium">Click a folder in the sidebar to set as watch folder</span>
+            <span className="font-medium">
+              Click a folder in the sidebar to set as watch folder
+            </span>
           </div>
-          <button onClick={cancelFolderSelect} className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-sm">Cancel</button>
+          <button
+            onClick={cancelFolderSelect}
+            className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-sm"
+          >
+            Cancel
+          </button>
         </div>
       )}
 
@@ -594,18 +819,32 @@ export default function AgentWorkspace() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-emerald-400 flex items-center gap-2">
-                <Bot className="w-6 h-6" />AI Agents ({watcherIds.length}/{MAX_WATCHERS})
+                <Orbit className="w-6 h-6" />
+                Orbits ({watcherIds.length}/{MAX_WATCHERS})
               </h2>
-              <p className="text-sm text-slate-500 mt-1">Create up to {MAX_WATCHERS} autonomous file watchers</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Orbits are AI-powered file watchers that continuously monitor folders and
+                automatically organize, rename, and process files based on your rules. Create up to{' '}
+                {MAX_WATCHERS} Orbits to manage different folders simultaneously.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               {watcherIds.length > 0 && (
-                <button onClick={() => setShowTemplates(!showTemplates)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${showTemplates ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
-                  <Sparkles className="w-4 h-4" />Templates
+                <button
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${showTemplates ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Templates
                 </button>
               )}
-              <button onClick={handleCreateWatcher} disabled={!canAddWatcher()} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors">
-                <Plus className="w-5 h-5" />Custom
+              <button
+                onClick={handleCreateWatcher}
+                disabled={!canAddWatcher()}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Custom
               </button>
             </div>
           </div>
@@ -619,15 +858,24 @@ export default function AgentWorkspace() {
               <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mb-4">
                 <Folder className="w-8 h-8 text-slate-500" />
               </div>
-              <h3 className="text-lg font-medium text-slate-400 mb-1">No Watchers Yet</h3>
-              <p className="text-sm text-slate-500 max-w-md mb-4">Create your first AI agent to start automatically organizing files</p>
-              <button onClick={() => setShowTemplates(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors">
-                <Sparkles className="w-5 h-5" />Choose a Template
+              <h3 className="text-lg font-medium text-slate-400 mb-1">No Orbits Yet</h3>
+              <p className="text-sm text-slate-500 max-w-md mb-4">
+                Create your first Orbit to start automatically organizing files. Each Orbit watches
+                a folder and applies your custom rules using AI.
+              </p>
+              <button
+                onClick={() => setShowTemplates(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
+              >
+                <Sparkles className="w-5 h-5" />
+                Choose a Template
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              {watcherIds.map((watcherId) => <WatcherCard key={watcherId} watcherId={watcherId} />)}
+              {watcherIds.map((watcherId) => (
+                <WatcherCard key={watcherId} watcherId={watcherId} />
+              ))}
             </div>
           )}
         </div>

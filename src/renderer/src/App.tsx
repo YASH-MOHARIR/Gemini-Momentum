@@ -14,7 +14,8 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquare,
-  HardDrive
+  HardDrive,
+  Orbit
 } from 'lucide-react'
 import FileTree from './components/FileTree'
 import ProgressPanel from './components/ProgressPanel'
@@ -75,7 +76,7 @@ function formatMessage(content: string): ReactElement[] {
       })
     }
     if (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*')) {
-      const bulletContent = line.replace(/^[\s]*[•\-\*][\s]*/, '')
+      const bulletContent = line.replace(/^[\s]*[•\-*][\s]*/, '')
       elements.push(
         <div key={index} className="flex gap-2 ml-2">
           <span className="text-accent-light">•</span>
@@ -157,8 +158,8 @@ function ModeTabs({ isAgentMode, onModeChange, agentStatus }: {
           isAgentMode ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
         }`}
       >
-        <Bot className="w-4 h-4" />
-        <span>Agent</span>
+        <Orbit className="w-4 h-4" />
+        <span>Orbits</span>
         {agentStatus === 'running' && (
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
         )}
