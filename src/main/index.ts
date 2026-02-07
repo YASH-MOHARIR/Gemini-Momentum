@@ -68,9 +68,9 @@ function createWindow(): void {
         buttons: ['Minimize to Tray', 'Stop All & Quit', 'Cancel'],
         defaultId: 0,
         cancelId: 2,
-        title: 'Agents Running',
-        message: `You have ${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running`,
-        detail: 'Agents will continue organizing files in the background if you minimize to tray.'
+        title: 'Orbits Running',
+        message: `You have ${allWatchers.length} Orbit${allWatchers.length > 1 ? 's' : ''} running`,
+        detail: 'Orbits will continue organizing files in the background if you minimize to tray.'
       })
 
       if (response === 0) {
@@ -79,7 +79,7 @@ function createWindow(): void {
           tray.displayBalloon({
             iconType: 'info',
             title: 'Momentum',
-            content: `${allWatchers.length} agent${allWatchers.length > 1 ? 's' : ''} running in background.`
+            content: `${allWatchers.length} Orbit${allWatchers.length > 1 ? 's' : ''} running in background.`
           })
         }
       } else if (response === 1) {
@@ -92,8 +92,6 @@ function createWindow(): void {
       mainWindow?.destroy()
     }
   })
-
-
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -114,7 +112,7 @@ function createTray(): void {
   const resizedIcon = trayIcon.resize({ width: 16, height: 16 })
 
   tray = new Tray(resizedIcon)
-  tray.setToolTip('Momentum - AI File Agent')
+  tray.setToolTip('Momentum - AI File Orbits')
 
   updateTrayMenu()
 
@@ -145,11 +143,11 @@ function updateTrayMenu(): void {
     if (status.paused) pausedCount++
   }
 
-  let statusText = '⚪ Agent Idle'
+  let statusText = '⚪ Orbit Idle'
   if (runningCount > 0) {
-    statusText = `🟢 ${runningCount} Agent${runningCount > 1 ? 's' : ''} Running`
+    statusText = `🟢 ${runningCount} Orbit${runningCount > 1 ? 's' : ''} Running`
   } else if (pausedCount > 0) {
-    statusText = `🟡 ${pausedCount} Agent${pausedCount > 1 ? 's' : ''} Paused`
+    statusText = `🟡 ${pausedCount} Orbit${pausedCount > 1 ? 's' : ''} Paused`
   }
 
   const contextMenu = Menu.buildFromTemplate([
@@ -164,7 +162,7 @@ function updateTrayMenu(): void {
     },
     { type: 'separator' },
     {
-      label: 'Stop All Agents',
+      label: 'Stop All Orbits',
       enabled: hasRunning,
       click: () => {
         fileWatcher.stopAllWatchers()
@@ -198,19 +196,22 @@ function setupWatcherStatusUpdates(): void {
 ipcMain.handle('config:get-api-keys', () => {
   return {
     hasGeminiKey: !!(process.env.GEMINI_API_KEY || store.get('geminiKey')),
-    hasGoogleCredentials: !!((process.env.GOOGLE_CLIENT_ID || store.get('googleClientId')) && 
-                            (process.env.GOOGLE_CLIENT_SECRET || store.get('googleClientSecret')))
+    hasGoogleCredentials: !!(
+      (process.env.GOOGLE_CLIENT_ID || store.get('googleClientId')) &&
+      (process.env.GOOGLE_CLIENT_SECRET || store.get('googleClientSecret'))
+    )
   }
 })
 
 ipcMain.handle('config:save-api-keys', async (_, keys: ApiKeys) => {
   try {
-    // Save Gemini key
-    store.set('geminiKey', keys.geminiKey)
-
-    // Initialize Gemini with new key
-    gemini.initializeGemini(keys.geminiKey)
-    initRuleProcessor(keys.geminiKey)
+    // Save Gemini key if provided
+    if (keys.geminiKey) {
+      store.set('geminiKey', keys.geminiKey)
+      // Initialize Gemini with new key
+      gemini.initializeGemini(keys.geminiKey)
+      initRuleProcessor(keys.geminiKey)
+    }
 
     // Save Google credentials if provided
     if (keys.googleClientId && keys.googleClientSecret) {
@@ -332,7 +333,13 @@ ipcMain.handle('agent:is-ready', () => {
 
 ipcMain.handle(
   'agent:chat',
-  async (_, messages: gemini.ChatMessage[], grantedFolders: string[], selectedFile?: string, isDirectory?: boolean) => {
+  async (
+    _,
+    messages: gemini.ChatMessage[],
+    grantedFolders: string[],
+    selectedFile?: string,
+    isDirectory?: boolean
+  ) => {
     return await gemini.chatStream(messages, grantedFolders, mainWindow, selectedFile, isDirectory)
   }
 )
@@ -419,19 +426,25 @@ ipcMain.handle('google:sign-out', async () => {
   return { success: true }
 })
 
-ipcMain.handle('google:create-sheet', async (_, data: {
-  title: string
-  headers: string[]
-  rows: (string | number)[][]
-  sheetName?: string
-}) => {
-  return await googleSheets.createGoogleSheet({
-    title: data.title,
-    headers: data.headers,
-    rows: data.rows,
-    sheetName: data.sheetName
-  })
-})
+ipcMain.handle(
+  'google:create-sheet',
+  async (
+    _,
+    data: {
+      title: string
+      headers: string[]
+      rows: (string | number)[][]
+      sheetName?: string
+    }
+  ) => {
+    return await googleSheets.createGoogleSheet({
+      title: data.title,
+      headers: data.headers,
+      rows: data.rows,
+      sheetName: data.sheetName
+    })
+  }
+)
 
 ipcMain.handle('google:search-gmail', async (_, query: string, maxResults?: number) => {
   return await gmail.searchEmails(query, maxResults || 20)
@@ -505,13 +518,14 @@ app.whenReady().then(() => {
 
   // Initialize Google Auth - check env first, then store
   const googleClientId = process.env.GOOGLE_CLIENT_ID || (store.get('googleClientId') as string)
-  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || (store.get('googleClientSecret') as string)
+  const googleClientSecret =
+    process.env.GOOGLE_CLIENT_SECRET || (store.get('googleClientSecret') as string)
 
   if (googleClientId && googleClientSecret) {
     googleAuth.initializeGoogleAuth(googleClientId, googleClientSecret)
     console.log('[MAIN] Google Auth initialized')
 
-    googleAuth.isSignedIn().then(signedIn => {
+    googleAuth.isSignedIn().then((signedIn) => {
       if (signedIn) {
         console.log('[MAIN] Google session restored')
         mainWindow?.webContents.send('google:signed-in')
