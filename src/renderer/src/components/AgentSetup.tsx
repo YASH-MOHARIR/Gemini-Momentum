@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { 
-  FolderOpen, 
-  Plus, 
-  X, 
-  Play, 
+import {
+  FolderOpen,
+  Plus,
+  X,
+  Play,
   Lightbulb,
   GripVertical,
   FileText,
@@ -30,7 +30,7 @@ const EXAMPLE_RULES = [
 
 export default function AgentSetup({ onStart, isEditing = false, onCancel }: Props) {
   const { config: existingConfig, setStatus } = useAgentStore()
-  
+
   // Initialize from existing config if available, otherwise start fresh
   const [watchFolder, setWatchFolder] = useState('')
   const [rules, setRules] = useState<AgentRule[]>([
@@ -69,7 +69,7 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
   }
 
   const updateRuleText = (id: string, text: string) => {
-    setRules(rules.map(r => 
+    setRules(rules.map(r =>
       r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r
     ))
   }
@@ -99,7 +99,7 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
     if (!watchFolder || activeRules.length === 0) return
 
     setIsStarting(true)
-    
+
     // Build log path - in watch folder
     const logPath = watchFolder + (watchFolder.includes('/') ? '/' : '\\') + 'momentum_activity_log.xlsx'
 
@@ -122,10 +122,10 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
       {/* Header */}
       <div className="text-center pb-2 border-b border-slate-700">
         <h2 className="text-sm font-semibold text-emerald-400 uppercase tracking-wide">
-          {isEditing ? 'Edit Agent Rules' : 'Agent Mode Setup'}
+          {isEditing ? 'Edit Orbit Rules' : 'Orbit Setup'}
         </h2>
         <p className="text-xs text-slate-500 mt-1">
-          {isEditing ? 'Update your file processing rules' : 'Configure automatic file processing'}
+          {isEditing ? 'Update your file processing rules' : 'Configure an AI-powered file watcher that automatically organizes, renames, and processes files based on your custom rules'}
         </p>
       </div>
 
@@ -135,13 +135,13 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
           <FolderOpen className="w-3.5 h-3.5" />
           Watch Folder
         </label>
-        
+
         <div className="flex gap-2">
-          <div 
+          <div
             className={`
               flex-1 px-3 py-2 rounded-lg text-sm truncate
-              ${watchFolder 
-                ? 'bg-slate-900 text-slate-200 border border-slate-700' 
+              ${watchFolder
+                ? 'bg-slate-900 text-slate-200 border border-slate-700'
                 : 'bg-slate-900/50 text-slate-500 border border-dashed border-slate-700'
               }
             `}
@@ -179,12 +179,12 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
                 <div className="pt-2.5 text-slate-600">
                   <GripVertical className="w-4 h-4" />
                 </div>
-                
+
                 {/* Rule number */}
                 <div className="pt-2 text-xs font-medium text-slate-500 w-4">
                   {index + 1}.
                 </div>
-                
+
                 {/* Input */}
                 <div className="flex-1">
                   <textarea
@@ -200,15 +200,15 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
                     </span>
                   </div>
                 </div>
-                
+
                 {/* Remove button */}
                 <button
                   onClick={() => removeRule(rule.id)}
                   disabled={rules.length <= 1}
                   className={`
                     p-1.5 rounded-md transition-all mt-1.5
-                    ${rules.length <= 1 
-                      ? 'text-slate-700 cursor-not-allowed' 
+                    ${rules.length <= 1
+                      ? 'text-slate-700 cursor-not-allowed'
                       : 'text-slate-500 hover:text-red-400 hover:bg-red-900/20'
                     }
                   `}
