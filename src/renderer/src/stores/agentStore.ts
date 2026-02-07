@@ -11,6 +11,7 @@ export interface AgentRule {
 
 export interface AgentConfig {
   id: string
+  name?: string
   watchFolder: string
   rules: AgentRule[]
   enableActivityLog: boolean
@@ -52,25 +53,25 @@ export interface AgentState {
   // Mode
   mode: 'chat' | 'agent'
   status: 'idle' | 'running' | 'paused'
-  
+
   // Multiple watchers
   watchers: Map<string, WatcherState>
   activeWatcherId: string | null
-  
+
   // Folder selection for agent mode
   folderSelectMode: FolderSelectMode
   pendingFolderSelect: {
     watcherId?: string
     field?: 'watch' | 'destination'
   } | null
-  
+
   // Computed property for easy access
   selectingForWatcherId: string | undefined
-  
+
   // Actions - Mode
   setMode: (mode: 'chat' | 'agent') => void
   setStatus: (status: 'idle' | 'running' | 'paused') => void
-  
+
   // Actions - Watchers
   createWatcher: (config: AgentConfig) => void
   removeWatcher: (watcherId: string) => void
@@ -81,12 +82,12 @@ export interface AgentState {
   addWatcherActivity: (watcherId: string, entry: ActivityEntry) => void
   clearWatcherActivity: (watcherId: string) => void
   setActiveWatcher: (watcherId: string | null) => void
-  
+
   // Actions - Folder selection
   startFolderSelect: (mode: FolderSelectMode, watcherId?: string, field?: 'watch' | 'destination') => void
   completeFolderSelect: (folderPath: string) => void
   cancelFolderSelect: () => void
-  
+
   // Helpers
   getWatcherCount: () => number
   canAddWatcher: () => boolean
@@ -105,7 +106,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   activeWatcherId: null,
   folderSelectMode: 'none',
   pendingFolderSelect: null,
-  
+
   // Computed property
   get selectingForWatcherId() {
     return get().pendingFolderSelect?.watcherId
@@ -122,7 +123,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       console.warn('[AGENT STORE] Max watchers reached')
       return
     }
-    
+
     const newWatcher: WatcherState = {
       config,
       status: 'idle',
@@ -134,11 +135,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       },
       recentActivity: []
     }
-    
+
     const newWatchers = new Map(watchers)
     newWatchers.set(config.id, newWatcher)
-    
-    set({ 
+
+    set({
       watchers: newWatchers,
       activeWatcherId: config.id
     })
@@ -148,7 +149,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers, activeWatcherId } = get()
     const newWatchers = new Map(watchers)
     newWatchers.delete(watcherId)
-    
+
     set({
       watchers: newWatchers,
       activeWatcherId: activeWatcherId === watcherId ? null : activeWatcherId
@@ -159,13 +160,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
     if (!watcher) return
-    
+
     const newWatchers = new Map(watchers)
     newWatchers.set(watcherId, {
       ...watcher,
       config: { ...watcher.config, ...configUpdates }
     })
-    
+
     set({ watchers: newWatchers })
   },
 
@@ -173,7 +174,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
     if (!watcher) return
-    
+
     const newWatchers = new Map(watchers)
     newWatchers.set(watcherId, {
       ...watcher,
@@ -182,9 +183,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         ? { ...watcher.stats, startTime: Date.now() }
         : watcher.stats
     })
-    
+
     set({ watchers: newWatchers })
-    
+
     // Update overall status
     const allStatuses = Array.from(newWatchers.values()).map(w => w.status)
     if (allStatuses.some(s => s === 'running')) {
@@ -200,13 +201,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
     if (!watcher) return
-    
+
     const newWatchers = new Map(watchers)
     newWatchers.set(watcherId, {
       ...watcher,
       stats: { ...watcher.stats, ...updates }
     })
-    
+
     set({ watchers: newWatchers })
   },
 
@@ -214,7 +215,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
     if (!watcher) return
-    
+
     const newWatchers = new Map(watchers)
     newWatchers.set(watcherId, {
       ...watcher,
@@ -223,7 +224,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         [stat]: (watcher.stats[stat] || 0) + 1
       }
     })
-    
+
     set({ watchers: newWatchers })
   },
 
@@ -231,15 +232,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
     if (!watcher) return
-    
+
     const newActivity = [entry, ...watcher.recentActivity].slice(0, MAX_ACTIVITY_PER_WATCHER)
-    
+
     const newWatchers = new Map(watchers)
     newWatchers.set(watcherId, {
       ...watcher,
       recentActivity: newActivity
     })
-    
+
     set({ watchers: newWatchers })
   },
 
@@ -247,13 +248,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
     if (!watcher) return
-    
+
     const newWatchers = new Map(watchers)
     newWatchers.set(watcherId, {
       ...watcher,
       recentActivity: []
     })
-    
+
     set({ watchers: newWatchers })
   },
 
@@ -269,7 +270,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   completeFolderSelect: (folderPath) => {
     const { pendingFolderSelect } = get()
-    
+
     if (pendingFolderSelect?.watcherId) {
       if (pendingFolderSelect.field === 'watch') {
         get().updateWatcherConfig(pendingFolderSelect.watcherId, {
@@ -277,7 +278,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         })
       }
     }
-    
+
     set({
       folderSelectMode: 'none',
       pendingFolderSelect: null
@@ -293,15 +294,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   // Helpers
   getWatcherCount: () => get().watchers.size,
-  
+
   canAddWatcher: () => get().watchers.size < MAX_WATCHERS,
-  
+
   getActiveWatcher: () => {
     const { watchers, activeWatcherId } = get()
     if (!activeWatcherId) return null
     return watchers.get(activeWatcherId) || null
   },
-  
+
   getWatcherDuration: (watcherId) => {
     const { watchers } = get()
     const watcher = watchers.get(watcherId)
