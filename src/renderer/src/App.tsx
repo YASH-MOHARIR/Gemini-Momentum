@@ -18,6 +18,7 @@ import {
   Orbit
 } from 'lucide-react'
 import FileTree from './components/FileTree'
+import SelectionActionBar from './components/SelectionActionBar'
 import ProgressPanel from './components/ProgressPanel'
 import MetricsPanel from './components/MetricsPanel'
 import ReviewPanel from './components/ReviewPanel'
@@ -479,6 +480,9 @@ function App(): ReactElement {
               </div>
             ))}
           </div>
+
+          {/* Selection Action Bar */}
+          {!isAgentMode && <SelectionActionBar />}
 
           {selectedFile && !isAgentMode && (
             <div className="p-2 border-t border-slate-700 bg-sky-900/20">

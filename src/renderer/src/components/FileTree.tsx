@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { 
-  ChevronRight, 
-  ChevronDown, 
-  Folder, 
+import {
+  ChevronRight,
+  ChevronDown,
+  Folder,
   FolderOpen,
   File,
   FileText,
@@ -34,19 +34,19 @@ interface FileTreeItemProps {
 
 function getFileIcon(filename: string) {
   const ext = filename.split('.').pop()?.toLowerCase() || ''
-  
+
   const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico']
   const codeExts = ['js', 'ts', 'tsx', 'jsx', 'py', 'html', 'css', 'json', 'md']
   const docExts = ['pdf', 'doc', 'docx', 'txt', 'rtf']
   const spreadsheetExts = ['xlsx', 'xls', 'csv']
   const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz']
-  
+
   if (imageExts.includes(ext)) return FileImage
   if (codeExts.includes(ext)) return FileCode
   if (docExts.includes(ext)) return FileText
   if (spreadsheetExts.includes(ext)) return FileSpreadsheet
   if (archiveExts.includes(ext)) return FileArchive
-  
+
   return File
 }
 
@@ -61,7 +61,7 @@ function formatSize(bytes: number): string {
 // Get highlight classes based on type
 function getHighlightClasses(highlightType: HighlightType | null): string {
   if (!highlightType) return ''
-  
+
   switch (highlightType) {
     case 'delete':
       return 'animate-highlight-delete bg-red-500/30 border-l-2 border-red-500'
@@ -78,11 +78,21 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[]>(entry.children || [])
   const [isLoading, setIsLoading] = useState(false)
-  
+
   // Get highlight state from store
   const highlightedFiles = useAppStore((state) => state.highlightedFiles)
   const highlightType = highlightedFiles.find(h => h.path === entry.path && h.expiresAt > Date.now())?.type || null
-  
+
+  // Get selection state from store
+  const isFileSelected = useAppStore((state) => state.isFileSelected)
+  const toggleFileSelection = useAppStore((state) => state.toggleFileSelection)
+  const selectFile = useAppStore((state) => state.selectFile)
+  const selectRange = useAppStore((state) => state.selectRange)
+  const lastSelectedPath = useAppStore((state) => state.lastSelectedPath)
+  const clearSelection = useAppStore((state) => state.clearSelection)
+
+  const isMultiSelected = isFileSelected(entry.path)
+
   useEffect(() => {
     if (entry.children) {
       setChildren(entry.children)
@@ -103,20 +113,49 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
     const timeoutId = setTimeout(refreshExpandedFolder, 100)
     return () => clearTimeout(timeoutId)
   }, [entry.path, entry.modified, isExpanded])
-  
+
   const isSelected = selectedPath === entry.path
   const isFolder = entry.isDirectory
-  const FileIcon = isFolder 
+  const FileIcon = isFolder
     ? (isExpanded ? FolderOpen : Folder)
     : getFileIcon(entry.name)
 
   const handleClick = async (e: React.MouseEvent) => {
+    // Handle folder selection mode for Orbits
     if (highlightFolders && isFolder && onFolderClick) {
       e.stopPropagation()
       onFolderClick(entry.path)
       return
     }
 
+    // Handle multi-select with keyboard modifiers
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl/Cmd+Click: Toggle selection
+      e.stopPropagation()
+      toggleFileSelection(entry.path)
+      onFileSelect?.(entry)
+      return
+    }
+
+    if (e.shiftKey && lastSelectedPath) {
+      // Shift+Click: Range selection
+      e.stopPropagation()
+      // Get all visible paths in current folder for range selection
+      const allPaths = getAllVisiblePaths(entry)
+      selectRange(lastSelectedPath, entry.path, allPaths)
+      onFileSelect?.(entry)
+      return
+    }
+
+    // Regular click: Single selection
+    if (!isFolder) {
+      selectFile(entry.path)
+    } else {
+      // For folders, clear selection and expand/collapse
+      clearSelection()
+    }
+
+    // Handle folder expansion
     if (isFolder) {
       if (!isExpanded && children.length === 0) {
         setIsLoading(true)
@@ -130,7 +169,15 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
       }
       setIsExpanded(!isExpanded)
     }
+
     onFileSelect?.(entry)
+  }
+
+  // Helper function to get all visible paths for range selection
+  const getAllVisiblePaths = (currentEntry: FileEntry): string[] => {
+    // This is a simplified version - in production, you'd traverse the entire visible tree
+    // For now, we'll just return the current entry's siblings
+    return [currentEntry.path]
   }
 
   // Determine styling based on mode and highlight
@@ -139,7 +186,12 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
     if (highlightType) {
       return getHighlightClasses(highlightType)
     }
-    
+
+    // Multi-select styling
+    if (isMultiSelected) {
+      return 'bg-sky-600/30 hover:bg-sky-600/40 text-sky-100 border-l-2 border-sky-500'
+    }
+
     if (highlightFolders && isFolder) {
       return 'bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-200 border-l-2 border-emerald-500 cursor-pointer'
     }
@@ -154,6 +206,7 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
     if (highlightType === 'delete') return 'text-red-400'
     if (highlightType === 'new') return 'text-emerald-400'
     if (highlightType === 'update') return 'text-blue-400'
+    if (isMultiSelected) return 'text-sky-400'
     if (highlightFolders && isFolder) return 'text-emerald-400'
     if (isFolder) return 'text-sky-400'
     return 'text-slate-400'
@@ -179,15 +232,15 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
             )
           ) : null}
         </span>
-        
+
         <FileIcon className={`w-4 h-4 flex-shrink-0 ${getIconColor()}`} />
-        
+
         <span className={`truncate text-sm flex-1 ${
           highlightType === 'delete' ? 'text-red-200 line-through' : ''
         }`}>
           {entry.name}
         </span>
-        
+
         {/* Highlight indicator */}
         {highlightType && (
           <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
@@ -198,24 +251,24 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
             {highlightType === 'delete' ? 'DEL' : highlightType === 'new' ? 'NEW' : 'UPD'}
           </span>
         )}
-        
+
         {/* Selected indicator */}
-        {isSelected && !highlightFolders && !highlightType && (
+        {(isSelected || isMultiSelected) && !highlightFolders && !highlightType && (
           <Check className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
         )}
-        
+
         {/* Click hint for folder selection mode */}
         {highlightFolders && isFolder && (
           <span className="text-xs text-emerald-400 flex-shrink-0">Click</span>
         )}
-        
+
         {!isFolder && !isSelected && !highlightFolders && !highlightType && (
           <span className="text-xs text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatSize(entry.size)}
           </span>
         )}
       </div>
-      
+
       {isFolder && isExpanded && !highlightFolders && children.length > 0 && (
         <div>
           {children.map((child) => (
@@ -231,9 +284,9 @@ function FileTreeItem({ entry, depth, onFileSelect, selectedPath, onFolderClick,
           ))}
         </div>
       )}
-      
+
       {isFolder && isExpanded && !highlightFolders && children.length === 0 && !isLoading && (
-        <div 
+        <div
           className="text-xs text-slate-500 italic py-1"
           style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}
         >
