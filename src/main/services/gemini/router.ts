@@ -58,7 +58,7 @@ EXAMPLES:
 "Extract data from this receipt" → image_analysis, requiresVision=true, steps=2, complexity=0.5
 "Summarize all PDFs and create report" → complex_reasoning, steps=8, complexity=0.8`
 
-// ... (imports remain same)
+
 
 function selectExecutor(classification: TaskClassification): ExecutorProfile {
   const { taskType, complexityScore, requiresVision, estimatedSteps, requiresMultipleTools } =
@@ -103,7 +103,8 @@ export async function classifyTask(
     }
   }
 
-  const prompt = `Classify this task:${contextInfo}\n\nUser request: "${userMessage}"`
+  const today = new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const prompt = `Classify this task (TODAY is ${today}):${contextInfo}\n\nUser request: "${userMessage}"`
 
   console.log('[ROUTER] Classifying task...')
   const startTime = Date.now()
@@ -122,20 +123,10 @@ export async function classifyTask(
     const responseText = result.response.text()
 
     // Try to extract JSON - handle markdown code blocks
-    let jsonMatch = responseText.match(/\{[\s\S]*\}/)
-
-    if (!jsonMatch) {
-      // Try to find JSON in code block
-      const codeBlockMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
-      if (codeBlockMatch) {
-        jsonMatch = match[1] // Fix: use match[1] from local variable if possible, but actually codeBlockMatch[1]
-      }
-    }
-
-    // Fix for above logic in single block
-    const jsonString = jsonMatch
-      ? jsonMatch[0]
-      : responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)?.[1] || null
+    const jsonString =
+      responseText.match(/\{[\s\S]*\}/)?.[0] ||
+      responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)?.[1] ||
+      null
 
     if (!jsonString) {
       console.warn('[ROUTER] No JSON found, response:', responseText)

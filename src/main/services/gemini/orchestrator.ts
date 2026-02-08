@@ -28,8 +28,6 @@ export interface AgentResponse {
 
 // ============ SYSTEM INSTRUCTION BUILDER ============
 
-// ... (imports remain same)
-
 // ============ SYSTEM INSTRUCTION BUILDER ============
 
 function buildSystemInstruction(
@@ -76,6 +74,8 @@ You can perform batch operations on these files like analyze, move, copy, or del
   }
 
   return `You are Momentum, an AI-powered desktop file management assistant.
+ 
+TODAY'S DATE: ${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
 
 WORKING FOLDER: ${targetFolder}${selectedContext}
 
