@@ -140,6 +140,60 @@ export interface WatcherStats {
   errors: number
 }
 
+// ============ Email Watcher Types ============
+
+export interface EmailWatcherConfig {
+  id: string
+  name: string
+  checkInterval: number
+  rules: string[]
+  categories: ('job' | 'receipt' | 'important' | 'spam' | 'other')[]
+  actions: {
+    [key: string]: ('notify' | 'star' | 'archive' | 'markRead' | 'applyLabel')[]
+  }
+  customLabels?: Record<string, string>
+  processedIds?: string[]
+  outputFolder?: string
+  lastChecked: string | null
+  isActive: boolean
+  createdAt: string
+}
+
+export interface EmailMatch {
+  id: string
+  threadId: string
+  subject: string
+  from: string
+  snippet: string
+  body: string
+  date: string
+  category: string
+  confidence: number
+  labels: string[]
+  isUnread: boolean
+  matchedRule?: string
+}
+
+export interface EmailWatcherStats {
+  emailsChecked: number
+  matchesFound: number
+  actionsPerformed: number
+  lastCheckTime: string | null
+  errors: number
+}
+
+export interface EmailActivityEntry {
+  id: string
+  timestamp: string
+  emailId: string
+  subject: string
+  from: string
+  category: string
+  action: string
+  confidence: number
+  matchedRule?: string
+}
+
 // ============ Pending Actions API ============
 
 export interface PendingAPI {
@@ -248,6 +302,52 @@ export interface ElectronAPI {
     getApiKeys: () => Promise<{ hasGeminiKey: boolean }>
     saveApiKeys: (keys: { geminiKey: string }) => Promise<{ success: boolean; error?: string }>
   }
+  email: {
+    startWatcher: (
+      config: EmailWatcherConfig
+    ) => Promise<{ success: boolean; watcherId?: string; error?: string }>
+    stopWatcher: (watcherId: string) => Promise<{ success: boolean }>
+    deleteWatcher: (watcherId: string) => Promise<{ success: boolean }>
+    pauseWatcher: (watcherId: string) => Promise<{ success: boolean }>
+    resumeWatcher: (watcherId: string) => Promise<{ success: boolean }>
+    getStatus: (
+      watcherId: string
+    ) => Promise<{
+      isActive: boolean
+      isPaused: boolean
+      lastChecked: string | null
+      stats: EmailWatcherStats
+    } | null>
+    updateWatcher: (
+      watcherId: string,
+      updates: Partial<EmailWatcherConfig>
+    ) => Promise<{ success: boolean; error?: string }>
+    // Events
+    getAllWatchers: () => Promise<EmailWatcherConfig[]>
+    manualCheck: (watcherId: string) => Promise<{ success: boolean; error?: string }>
+    getMatches: (watcherId: string) => Promise<EmailMatch[]>
+    getActivity: (watcherId: string) => Promise<EmailActivityEntry[]>
+    deleteMessage: (
+      watcherId: string,
+      messageId: string,
+      fromGmail: boolean
+    ) => Promise<{ success: boolean; error?: string }>
+
+    // Events
+    onWatcherStarted: (callback: (watcherId: string) => void) => () => void
+    onMatchFound: (callback: (data: { watcherId: string; email: EmailMatch }) => void) => () => void
+    onActivity: (
+      callback: (data: { watcherId: string; entry: EmailActivityEntry }) => void
+    ) => () => void
+    onStatsUpdated: (
+      callback: (data: { watcherId: string; stats: EmailWatcherStats }) => void
+    ) => () => void
+    onError: (callback: (data: { watcherId: string; error: string }) => void) => () => void
+    onCheckStarted: (callback: (data: { watcherId: string }) => void) => () => void
+    onCheckCompleted: (
+      callback: (data: { watcherId: string; emailsFound: number }) => void
+    ) => () => void
+  }
 }
 
 declare global {
@@ -327,8 +427,8 @@ const api: ElectronAPI = {
       ipcRenderer.on('agent:stream-chunk', handler)
       return () => ipcRenderer.removeListener('agent:stream-chunk', handler)
     },
-    onStreamEnd: (callback: () => void) => {
-      const handler = () => callback()
+    onStreamEnd: (callback: (chunk: string) => void) => {
+      const handler = () => callback(chunk) // Corrected argument match
       ipcRenderer.on('agent:stream-end', handler)
       return () => ipcRenderer.removeListener('agent:stream-end', handler)
     },
@@ -467,7 +567,7 @@ const api: ElectronAPI = {
       ipcRenderer.on('watcher:error', handler)
       return () => ipcRenderer.removeListener('watcher:error', handler)
     },
-    onAllStopped: (callback: () => void) => {
+    onAllStopped: (callback: (() => void)) => {
       const handler = () => callback()
       ipcRenderer.on('watcher:all-stopped', handler)
       return () => ipcRenderer.removeListener('watcher:all-stopped', handler)
@@ -479,6 +579,61 @@ const api: ElectronAPI = {
     getApiKeys: (): Promise<{ hasGeminiKey: boolean }> => ipcRenderer.invoke('config:get-api-keys'),
     saveApiKeys: (keys: { geminiKey: string }): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('config:save-api-keys', keys)
+  },
+
+  // Email Watcher
+  email: {
+    startWatcher: (config: EmailWatcherConfig): Promise<{ success: boolean; watcherId?: string; error?: string }> => ipcRenderer.invoke('email:start-watcher', config),
+    stopWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:stop-watcher', watcherId),
+    deleteWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:delete-watcher', watcherId),
+    pauseWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:pause-watcher', watcherId),
+    resumeWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:resume-watcher', watcherId),
+    getStatus: (watcherId: string): Promise<{ isActive: boolean; isPaused: boolean; lastChecked: string | null; stats: EmailWatcherStats } | null> => ipcRenderer.invoke('email:get-status', watcherId),
+    getAllWatchers: (): Promise<EmailWatcherConfig[]> => ipcRenderer.invoke('email:get-all-watchers'),
+    manualCheck: (watcherId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('email:manual-check', watcherId),
+    getMatches: (watcherId: string): Promise<EmailMatch[]> => ipcRenderer.invoke('email:get-matches', watcherId),
+    getActivity: (watcherId: string): Promise<EmailActivityEntry[]> => ipcRenderer.invoke('email:get-activity', watcherId),
+
+    updateWatcher: (watcherId: string, updates: Partial<EmailWatcherConfig>): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('email:update-watcher', watcherId, updates),
+    deleteMessage: (watcherId: string, messageId: string, fromGmail: boolean): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('email:delete-message', watcherId, messageId, fromGmail),
+
+    onWatcherStarted: (callback: (watcherId: string) => void) => {
+      const handler = (_: any, watcherId: string) => callback(watcherId)
+      ipcRenderer.on('email:watcher-started', handler)
+      return () => ipcRenderer.removeListener('email:watcher-started', handler)
+    },
+    onMatchFound: (callback: (data: { watcherId: string; email: EmailMatch }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('email:match-found', handler)
+      return () => ipcRenderer.removeListener('email:match-found', handler)
+    },
+    onActivity: (callback: (data: { watcherId: string; entry: EmailActivityEntry }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('email:activity', handler)
+      return () => ipcRenderer.removeListener('email:activity', handler)
+    },
+    onStatsUpdated: (callback: (data: { watcherId: string; stats: EmailWatcherStats }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('email:stats-updated', handler)
+      return () => ipcRenderer.removeListener('email:stats-updated', handler)
+    },
+    onError: (callback: (data: { watcherId: string; error: string }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('email:error', handler)
+      return () => ipcRenderer.removeListener('email:error', handler)
+    },
+    onCheckStarted: (callback: (data: { watcherId: string }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('email:check-started', handler)
+      return () => ipcRenderer.removeListener('email:check-started', handler)
+    },
+    onCheckCompleted: (callback: (data: { watcherId: string; emailsFound: number }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('email:check-completed', handler)
+      return () => ipcRenderer.removeListener('email:check-completed', handler)
+    }
   }
 }
 

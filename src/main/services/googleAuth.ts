@@ -7,11 +7,13 @@ import * as path from 'path'
 import { app } from 'electron'
 
 const SCOPES = [
-  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.labels',
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/userinfo.profile'
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://mail.google.com/' 
 ]
 
 let oauth2Client: InstanceType<typeof google.auth.OAuth2> | null = null

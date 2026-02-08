@@ -235,3 +235,63 @@ export async function searchAndDownloadReceipts(
     }
   }
 }
+
+export interface EmailDetail {
+  id: string
+  threadId: string
+  subject: string
+  from: string
+  date: string
+  snippet: string
+  body: string
+  labels: string[]
+}
+
+export async function fetchEmailDetails(messageId: string): Promise<EmailDetail | null> {
+  const auth = getAuthClient()
+  if (!auth || !(await isSignedIn())) return null
+
+  const gmail = google.gmail({ version: 'v1', auth })
+
+  try {
+    const response = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full'
+    })
+
+    const msg = response.data
+    const headers = msg.payload?.headers || []
+    const subject = headers.find((h) => h.name === 'Subject')?.value || '(No Subject)'
+    const from = headers.find((h) => h.name === 'From')?.value || 'Unknown'
+    const date = headers.find((h) => h.name === 'Date')?.value || ''
+
+    // Extract Body
+    let body = ''
+    if (msg.payload?.body?.data) {
+      body = Buffer.from(msg.payload.body.data, 'base64').toString('utf-8')
+    } else if (msg.payload?.parts) {
+      const textPart = msg.payload.parts.find((p) => p.mimeType === 'text/plain')
+      const htmlPart = msg.payload.parts.find((p) => p.mimeType === 'text/html')
+      const partToUse = textPart || htmlPart || msg.payload.parts[0]
+
+      if (partToUse && partToUse.body?.data) {
+        body = Buffer.from(partToUse.body.data, 'base64').toString('utf-8')
+      }
+    }
+
+    return {
+      id: msg.id!,
+      threadId: msg.threadId!,
+      subject,
+      from,
+      date,
+      snippet: msg.snippet || '',
+      body,
+      labels: msg.labelIds || []
+    }
+  } catch (err) {
+    console.error(`[GMAIL] Failed to fetch details for ${messageId}:`, err)
+    return null
+  }
+}
