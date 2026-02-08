@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Key, Loader2, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle, ExternalLink, Loader2 } from 'lucide-react'
+import momentumLogo from '../assets/momentum.png'
 
 interface SetupScreenProps {
   onComplete: () => void
@@ -47,8 +48,8 @@ export default function SetupScreen({ onComplete }: SetupScreenProps) {
       <div className="bg-zinc-800/50 backdrop-blur border border-zinc-700 rounded-2xl p-8 max-w-lg w-full shadow-2xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Key className="w-8 h-8 text-white" />
+          <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-700 shadow-xl overflow-hidden p-3">
+            <img src={momentumLogo} alt="Momentum" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">Welcome to Momentum</h1>
           <p className="text-zinc-400">Enter your API keys to get started</p>

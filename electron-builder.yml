@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: momentum
+appId: com.momentum.app
+productName: Momentum
 directories:
   buildResources: build
 files:

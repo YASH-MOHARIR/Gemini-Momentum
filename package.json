@@ -1,7 +1,7 @@
 {
   "name": "momentum",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Momentum - AI-powered autonomous file organization",
   "main": "./out/main/index.js",
   "author": "example.com",
   "homepage": "https://electron-vite.org",
@@ -27,6 +27,7 @@
     "chokidar": "^5.0.0",
     "dotenv": "^17.2.3",
     "electron-store": "^8.2.0",
+    "framer-motion": "^12.33.0",
     "googleapis": "^170.1.0",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.11.0",

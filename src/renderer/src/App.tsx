@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, type ReactElement } from 'react'
 import {
-  Zap,
   Send,
   FolderOpen,
   FolderPlus,
@@ -18,6 +17,7 @@ import {
   Orbit
 } from 'lucide-react'
 import FileTree from './components/FileTree'
+import momentumLogo from './assets/momentum.png'
 import SelectionActionBar from './components/SelectionActionBar'
 import ProgressPanel from './components/ProgressPanel'
 import MetricsPanel from './components/MetricsPanel'
@@ -30,6 +30,7 @@ import BeforeAfterView from './components/BeforeAfterView'
 import SetupScreen from './components/SetupScreen'
 import { useAppStore, FileEntry, Message, StorageAnalysisData } from './stores/appStore'
 import { useAgentStore } from './stores/agentStore'
+import { useEmailStore } from './stores/emailStore'
 
 interface TaskClassification {
   taskType: string
@@ -71,7 +72,11 @@ function formatMessage(content: string): ReactElement[] {
       const parts = line.split(/(\*\*[^*]+\*\*)/)
       formattedLine = parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+          return (
+            <strong key={i} className="font-semibold">
+              {part.slice(2, -2)}
+            </strong>
+          )
         }
         return part
       })
@@ -97,11 +102,15 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
   const isUser = message.role === 'user'
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-accent' : 'bg-slate-700'}`}>
+      <div
+        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-accent' : 'bg-slate-700'}`}
+      >
         {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
       </div>
       <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
-        <div className={`inline-block px-4 py-2 rounded-lg text-sm ${isUser ? 'bg-accent text-white' : 'bg-slate-800 text-slate-100'} ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}`}>
+        <div
+          className={`inline-block px-4 py-2 rounded-lg text-sm ${isUser ? 'bg-accent text-white' : 'bg-slate-800 text-slate-100'} ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}`}
+        >
           {message.isError && (
             <div className="flex items-center gap-2 mb-1 text-red-400">
               <AlertCircle className="w-4 h-4" />
@@ -113,7 +122,9 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
           ) : (
             <div className="space-y-1">
               {formatMessage(message.content)}
-              {isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" />}
+              {isStreaming && (
+                <span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" />
+              )}
             </div>
           )}
         </div>
@@ -121,7 +132,7 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
           <div className="mt-2 space-y-1">
             {message.toolCalls.map((tool, i) => (
               <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
-                <Wrench className="w-3 h-3" />
+                <Wrench className="w-3 h-3 text-emerald-400" />
                 <span className="text-slate-400">{tool.name}</span>
               </div>
             ))}
@@ -137,7 +148,11 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
   )
 }
 
-function ModeTabs({ isAgentMode, onModeChange, agentStatus }: {
+function ModeTabs({
+  isAgentMode,
+  onModeChange,
+  agentStatus
+}: {
   isAgentMode: boolean
   onModeChange: (mode: 'chat' | 'agent') => void
   agentStatus: string
@@ -147,7 +162,9 @@ function ModeTabs({ isAgentMode, onModeChange, agentStatus }: {
       <button
         onClick={() => onModeChange('chat')}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-          !isAgentMode ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+          !isAgentMode
+            ? 'bg-sky-600 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
         }`}
       >
         <MessageSquare className="w-4 h-4" />
@@ -156,7 +173,9 @@ function ModeTabs({ isAgentMode, onModeChange, agentStatus }: {
       <button
         onClick={() => onModeChange('agent')}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all relative ${
-          isAgentMode ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+          isAgentMode
+            ? 'bg-emerald-600 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
         }`}
       >
         <Orbit className="w-4 h-4" />
@@ -175,9 +194,13 @@ function App(): ReactElement {
   const [isLoading, setIsLoading] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review' | 'storage'>('progress')
+  const [activeTab, setActiveTab] = useState<'progress' | 'metrics' | 'review' | 'storage'>(
+    'progress'
+  )
   const [pendingCount, setPendingCount] = useState(0)
-  const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(null)
+  const [currentClassification, setCurrentClassification] = useState<TaskClassification | null>(
+    null
+  )
   const [isGoogleConnected, setIsGoogleConnected] = useState(false)
   const [showTemplates, setShowTemplates] = useState(true)
   const [isCheckingSetup, setIsCheckingSetup] = useState(true)
@@ -197,11 +220,29 @@ function App(): ReactElement {
   const isAgentMode = agentMode === 'agent'
 
   const {
-    folders, selectedFile, messages, isProcessing, isAgentReady, storageAnalysis,
+    folders,
+    selectedFile,
+    messages,
+    isProcessing,
+    isAgentReady,
+    storageAnalysis,
     beforeAfterResult,
-    addFolder, removeFolder, setSelectedFile, addMessage, setProcessing,
-    setAgentReady, startTask, addTaskStep, updateTaskStep, completeTask, setStorageAnalysis,
-    hideBeforeAfter, selectAll, clearSelection, getSelectedCount, getSelectedFiles
+    addFolder,
+    removeFolder,
+    setSelectedFile,
+    addMessage,
+    setProcessing,
+    setAgentReady,
+    startTask,
+    addTaskStep,
+    updateTaskStep,
+    completeTask,
+    setStorageAnalysis,
+    hideBeforeAfter,
+    selectAll,
+    clearSelection,
+    getSelectedCount,
+    getSelectedFiles
   } = useAppStore()
 
   const activeWatcher = selectingForWatcherId ? watchers.get(selectingForWatcherId) : undefined
@@ -269,9 +310,9 @@ function App(): ReactElement {
       if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !isAgentMode) {
         e.preventDefault()
         const allPaths: string[] = []
-        folders.forEach(folder => {
+        folders.forEach((folder) => {
           const collectPaths = (entries: FileEntry[]) => {
-            entries.forEach(entry => {
+            entries.forEach((entry) => {
               if (!entry.isDirectory) {
                 allPaths.push(entry.path)
               }
@@ -295,13 +336,14 @@ function App(): ReactElement {
         e.preventDefault()
         const files = getSelectedFiles()
         // Queue deletion using the same API as SelectionActionBar
-        window.api.pending.queueMultiple(files, 'Batch delete (keyboard shortcut)')
+        window.api.pending
+          .queueMultiple(files, 'Batch delete (keyboard shortcut)')
           .then(() => {
             clearSelection()
             // Switch to review tab to show the queued items
             setActiveTab('review')
           })
-          .catch(err => console.error('Failed to queue deletions via keyboard:', err))
+          .catch((err) => console.error('Failed to queue deletions via keyboard:', err))
       }
     }
 
@@ -313,7 +355,10 @@ function App(): ReactElement {
   useEffect(() => {
     const unsubSignedIn = window.api.google.onSignedIn(() => setIsGoogleConnected(true))
     const unsubSignedOut = window.api.google.onSignedOut(() => setIsGoogleConnected(false))
-    return () => { unsubSignedIn(); unsubSignedOut() }
+    return () => {
+      unsubSignedIn()
+      unsubSignedOut()
+    }
   }, [])
 
   useEffect(() => {
@@ -324,7 +369,9 @@ function App(): ReactElement {
         if (count > 0 && activeTab !== 'review' && !isAgentMode) {
           setActiveTab('review')
         }
-      } catch (err) { console.error('Failed to check pending count:', err) }
+      } catch (err) {
+        console.error('Failed to check pending count:', err)
+      }
     }
     checkPending()
     const interval = setInterval(checkPending, 2000)
@@ -345,14 +392,18 @@ function App(): ReactElement {
         try {
           const newEntries = await window.api.fs.listDir(folder.path)
           useAppStore.getState().updateFolderEntries(folder.path, newEntries)
-        } catch (err) { console.error(`Failed to refresh folder ${folder.path}:`, err) }
+        } catch (err) {
+          console.error(`Failed to refresh folder ${folder.path}:`, err)
+        }
       }
     })
     return () => unsubFsChanged()
   }, [folders])
 
   useEffect(() => {
-    const unsubChunk = window.api.agent.onStreamChunk((chunk) => setStreamingContent((prev) => prev + chunk))
+    const unsubChunk = window.api.agent.onStreamChunk((chunk) =>
+      setStreamingContent((prev) => prev + chunk)
+    )
     const unsubEnd = window.api.agent.onStreamEnd(() => setIsStreaming(false))
     const unsubToolCall = window.api.agent.onToolCall((data) => {
       const stepId = addTaskStep(data.name, data.args.path || data.args.source_path)
@@ -382,7 +433,42 @@ function App(): ReactElement {
         complexityScore: classification.complexityScore
       })
     })
-    return () => { unsubChunk(); unsubEnd(); unsubToolCall(); unsubToolResult(); unsubRoutingStart(); unsubRoutingComplete() }
+
+    // Email Watcher Notifications
+    // Email Watcher Notifications & Store Updates
+    const unsubMatchFound = window.api.email.onMatchFound(({ watcherId, email }) => {
+      // Update Store
+      useEmailStore.getState().addMatch(watcherId, email)
+      
+      const notif = new Notification('Momentum: Email Match Found', {
+        body: `${email.subject}\nFrom: ${email.from}`,
+        icon: '/src/renderer/src/assets/icon.png' // consistent with tray icon
+      })
+      notif.onclick = () => {
+        window.api.agent.openWindow?.() // Hypothetical or just let it focus
+        // If we had a router, we'd navigate to watcherId
+      }
+    })
+
+    const unsubActivity = window.api.email.onActivity(({ watcherId, entry }) => {
+      useEmailStore.getState().addActivity(watcherId, entry)
+    })
+
+    const unsubStats = window.api.email.onStatsUpdated(({ watcherId, stats }) => {
+      useEmailStore.getState().updateStats(watcherId, stats)
+    })
+
+    return () => {
+      unsubChunk()
+      unsubEnd()
+      unsubToolCall()
+      unsubToolResult()
+      unsubRoutingStart()
+      unsubRoutingComplete()
+      unsubMatchFound()
+      unsubActivity()
+      unsubStats()
+    }
   }, [addTaskStep, updateTaskStep, setStorageAnalysis])
 
   useEffect(() => {
@@ -397,8 +483,15 @@ function App(): ReactElement {
     try {
       const entries = await window.api.fs.listDir(folderPath)
       const folderName = folderPath.split(/[/\\]/).pop() || folderPath
-      addFolder({ path: folderPath, name: folderName, entries, grantedAt: new Date().toISOString() })
-    } catch (err) { console.error('Failed to load folder:', err) }
+      addFolder({
+        path: folderPath,
+        name: folderName,
+        entries,
+        grantedAt: new Date().toISOString()
+      })
+    } catch (err) {
+      console.error('Failed to load folder:', err)
+    }
     setIsLoading(false)
   }
 
@@ -417,7 +510,9 @@ function App(): ReactElement {
     setProcessing(true)
     startTask(userMessage)
     try {
-      const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map((m) => ({ role: m.role, content: m.content }))
+      const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map(
+        (m) => ({ role: m.role, content: m.content })
+      )
       const grantedFolders = folders.map((f) => f.path)
       const selectedFiles = getSelectedFiles()
       const response = await window.api.agent.chat(
@@ -449,7 +544,10 @@ function App(): ReactElement {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
   }
 
   const handleTemplateSelect = (command: string) => handleSendMessage(command)
@@ -474,27 +572,41 @@ function App(): ReactElement {
   const hasStorageData = storageAnalysis !== null
 
   return (
-    <div className={`h-screen flex flex-col bg-slate-900 ${isAgentMode ? 'agent-mode theme-transition' : 'theme-transition'}`}>
+    <div
+      className={`h-screen flex flex-col bg-slate-900 ${isAgentMode ? 'agent-mode theme-transition' : 'theme-transition'}`}
+    >
       {/* Header */}
-      <header className={`h-14 bg-slate-800 border-b border-slate-700 flex items-center px-4 drag-region ${isAgentMode ? 'header-accent' : ''}`}>
+      <header
+        className={`h-14 bg-slate-800 border-b border-slate-700 flex items-center px-4 drag-region ${isAgentMode ? 'header-accent' : ''}`}
+      >
         <div className="flex items-center gap-3 no-drag">
-          <Zap className={`w-5 h-5 ${isAgentMode ? 'text-emerald-500' : 'text-sky-500'}`} />
-          <span className="font-semibold text-slate-100">Momentum</span>
+          <img src={momentumLogo} alt="Momentum" className="w-6 h-6 object-contain" />
+          <span className="font-semibold text-slate-100 italic tracking-tight">Momentum</span>
           <div className="ml-4">
-            <ModeTabs isAgentMode={isAgentMode} onModeChange={handleModeChange} agentStatus={agentStatus} />
+            <ModeTabs
+              isAgentMode={isAgentMode}
+              onModeChange={handleModeChange}
+              agentStatus={agentStatus}
+            />
           </div>
         </div>
         <div className="ml-auto flex items-center gap-4 no-drag">
           <GoogleSignIn />
           <div className="w-px h-5 bg-slate-700" />
-          <div className={`flex items-center gap-1.5 text-xs ${isAgentReady ? 'text-emerald-400' : 'text-amber-400'}`}>
-            <span className={`w-2 h-2 rounded-full ${isAgentReady ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+          <div
+            className={`flex items-center gap-1.5 text-xs ${isAgentReady ? 'text-emerald-400' : 'text-amber-400'}`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${isAgentReady ? 'bg-emerald-400' : 'bg-amber-400'}`}
+            />
             {isAgentReady ? 'AI Ready' : 'No API Key'}
           </div>
           {hasAnyFolder && (
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
               <Shield className="w-3.5 h-3.5 text-emerald-500" />
-              <span>{folders.length} folder{folders.length > 1 ? 's' : ''}</span>
+              <span>
+                {folders.length} folder{folders.length > 1 ? 's' : ''}
+              </span>
             </div>
           )}
         </div>
@@ -503,12 +615,19 @@ function App(): ReactElement {
       {/* Main */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside className={`bg-slate-800 border-r border-slate-700 flex flex-col transition-all ${isSelectingFolder ? 'ring-2 ring-emerald-500 ring-inset' : ''}`} style={{ width: sidebarWidth }}>
+        <aside
+          className={`bg-slate-800 border-r border-slate-700 flex flex-col transition-all ${isSelectingFolder ? 'ring-2 ring-emerald-500 ring-inset' : ''}`}
+          style={{ width: sidebarWidth }}
+        >
           <div className="p-3 border-b border-slate-700 flex items-center justify-between">
             <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide">
               {isSelectingFolder ? '👆 Click a folder' : 'Files'}
             </h2>
-            <button onClick={handleSelectFolder} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors" title="Add folder">
+            <button
+              onClick={handleSelectFolder}
+              className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+              title="Add folder"
+            >
               <FolderPlus className="w-4 h-4" />
             </button>
           </div>
@@ -522,7 +641,12 @@ function App(): ReactElement {
             {!isLoading && folders.length === 0 && (
               <div className="p-4 text-center">
                 <p className="text-sm text-slate-500 mb-3">No folder selected</p>
-                <button onClick={handleSelectFolder} className="text-sm text-accent hover:text-accent-light">+ Add a folder</button>
+                <button
+                  onClick={handleSelectFolder}
+                  className="text-sm text-accent hover:text-accent-light"
+                >
+                  + Add a folder
+                </button>
               </div>
             )}
             {folders.map((folder) => (
@@ -533,12 +657,24 @@ function App(): ReactElement {
                       ? 'bg-emerald-900/30 hover:bg-emerald-800/40'
                       : 'bg-slate-750 hover:bg-slate-700/30'
                   }`}
-                  onClick={() => isSelectingFolder ? handleFolderClickForAgent(folder.path) : null}
+                  onClick={() =>
+                    isSelectingFolder ? handleFolderClickForAgent(folder.path) : null
+                  }
                 >
-                  <FolderOpen className={`w-4 h-4 flex-shrink-0 ${isAgentMode ? 'text-emerald-400' : 'text-sky-400'}`} />
-                  <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>{folder.name}</span>
+                  <FolderOpen
+                    className={`w-4 h-4 flex-shrink-0 ${isAgentMode ? 'text-emerald-400' : 'text-sky-400'}`}
+                  />
+                  <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>
+                    {folder.name}
+                  </span>
                   {!isSelectingFolder && (
-                    <button onClick={(e) => { e.stopPropagation(); removeFolder(folder.path) }} className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-all">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeFolder(folder.path)
+                      }}
+                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-all"
+                    >
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -561,7 +697,8 @@ function App(): ReactElement {
           {selectedFile && !isAgentMode && (
             <div className="p-2 border-t border-slate-700 bg-sky-900/20">
               <div className="text-xs truncate text-sky-300" title={selectedFile.path}>
-                <span className="text-slate-400">Selected: </span>{selectedFile.name}
+                <span className="text-slate-400">Selected: </span>
+                {selectedFile.name}
               </div>
             </div>
           )}
@@ -585,7 +722,8 @@ function App(): ReactElement {
               </button>
             ) : (
               <p className="text-[10px] text-slate-500">
-                Hold <kbd className="font-sans px-1 bg-slate-800 rounded text-slate-400">Ctrl</kbd> to multi-select
+                Hold <kbd className="font-sans px-1 bg-slate-800 rounded text-slate-400">Ctrl</kbd>{' '}
+                to multi-select
               </p>
             )}
           </div>
@@ -601,7 +739,7 @@ function App(): ReactElement {
                 <div className="max-w-3xl mx-auto space-y-4">
                   {messages.length === 0 && !isStreaming ? (
                     <div className="text-center py-12">
-                      <Zap className="w-12 h-12 mx-auto mb-4 text-sky-500" />
+                      <img src={momentumLogo} alt="Momentum" className="w-16 h-16 mx-auto mb-6 object-contain" />
                       <h1 className="text-2xl font-bold text-slate-100 mb-2">
                         {hasAnyFolder ? 'Ready to help!' : 'Welcome to Momentum'}
                       </h1>
@@ -612,12 +750,17 @@ function App(): ReactElement {
                       </p>
                       {!hasAnyFolder && (
                         <>
-                          <button onClick={handleSelectFolder} className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg font-medium transition-colors">
-                            <FolderOpen className="w-4 h-4" />Select Folder
+                          <button
+                            onClick={handleSelectFolder}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg font-medium transition-colors"
+                          >
+                            <FolderOpen className="w-4 h-4" />
+                            Select Folder
                           </button>
                           <div className="mt-8 p-4 bg-slate-800/50 rounded-lg border border-slate-700 text-left max-w-md mx-auto">
                             <h3 className="text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
-                              <Shield className="w-4 h-4 text-emerald-500" />Your files are safe
+                              <Shield className="w-4 h-4 text-emerald-500" />
+                              Your files are safe
                             </h3>
                             <ul className="text-xs text-slate-400 space-y-1">
                               <li>• Momentum only accesses folders you explicitly grant</li>
@@ -630,20 +773,30 @@ function App(): ReactElement {
                     </div>
                   ) : (
                     <>
-                      {messages.map((msg) => (<ChatMessage key={msg.id} message={msg} />))}
+                      {messages.map((msg) => (
+                        <ChatMessage key={msg.id} message={msg} />
+                      ))}
                       {isProcessing && (
                         <div className="flex gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center"><Bot className="w-4 h-4" /></div>
+                          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                            <Bot className="w-4 h-4" />
+                          </div>
                           <div className="space-y-2">
                             <RoutingIndicator classification={currentClassification} />
                             {streamingContent ? (
                               <div className="px-4 py-2 bg-slate-800 rounded-lg text-sm text-slate-100">
-                                <div className="space-y-1">{formatMessage(streamingContent)}<span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" /></div>
+                                <div className="space-y-1">
+                                  {formatMessage(streamingContent)}
+                                  <span className="inline-block w-2 h-4 ml-1 bg-accent animate-pulse" />
+                                </div>
                               </div>
-                            ) : currentClassification && (
-                              <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-                                <span className="w-2 h-2 bg-accent rounded-full animate-pulse" /><span className="text-sm text-slate-400">Executing...</span>
-                              </div>
+                            ) : (
+                              currentClassification && (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
+                                  <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+                                  <span className="text-sm text-slate-400">Executing...</span>
+                                </div>
+                              )
                             )}
                           </div>
                         </div>
@@ -658,20 +811,49 @@ function App(): ReactElement {
                 <div className="max-w-3xl mx-auto">
                   {hasAnyFolder && (
                     <div className="mb-2">
-                      <button onClick={() => setShowTemplates(!showTemplates)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-400 mb-1">
-                        {showTemplates ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}Quick Actions
+                      <button
+                        onClick={() => setShowTemplates(!showTemplates)}
+                        className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-400 mb-1"
+                      >
+                        {showTemplates ? (
+                          <ChevronUp className="w-3 h-3" />
+                        ) : (
+                          <ChevronDown className="w-3 h-3" />
+                        )}
+                        Quick Actions
                       </button>
-                      {showTemplates && <TaskTemplates onSelectTemplate={handleTemplateSelect} disabled={isProcessing} isGoogleConnected={isGoogleConnected} />}
+                      {showTemplates && (
+                        <TaskTemplates
+                          onSelectTemplate={handleTemplateSelect}
+                          disabled={isProcessing}
+                          isGoogleConnected={isGoogleConnected}
+                        />
+                      )}
                     </div>
                   )}
                   <div className="bg-slate-800 rounded-lg border border-slate-700 flex items-center">
                     <input
-                      type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleKeyDown}
-                      placeholder={hasAnyFolder ? (getSelectedCount() > 0 ? `Ask about ${getSelectedCount()} selected files...` : (selectedFile ? `Ask about ${selectedFile.name}...` : 'Ask Momentum to organize files, extract data, create reports...')) : 'Select a folder to get started...'}
+                      type="text"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={
+                        hasAnyFolder
+                          ? getSelectedCount() > 0
+                            ? `Ask about ${getSelectedCount()} selected files...`
+                            : selectedFile
+                              ? `Ask about ${selectedFile.name}...`
+                              : 'Ask Momentum to organize files, extract data, create reports...'
+                          : 'Select a folder to get started...'
+                      }
                       disabled={!hasAnyFolder || isProcessing}
                       className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
                     />
-                    <button onClick={() => handleSendMessage()} disabled={!hasAnyFolder || !inputValue.trim() || isProcessing} className="p-2 m-1.5 bg-accent hover:bg-accent-dark disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-md transition-colors">
+                    <button
+                      onClick={() => handleSendMessage()}
+                      disabled={!hasAnyFolder || !inputValue.trim() || isProcessing}
+                      className="p-2 m-1.5 bg-accent hover:bg-accent-dark disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-md transition-colors"
+                    >
                       <Send className="w-4 h-4" />
                     </button>
                   </div>
@@ -682,13 +864,33 @@ function App(): ReactElement {
             {/* Right Panel (Chat Mode Only) */}
             <aside className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col overflow-hidden">
               <div className="flex border-b border-slate-700 flex-shrink-0">
-                <button onClick={() => setActiveTab('progress')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${activeTab === 'progress' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>Progress</button>
-                <button onClick={() => setActiveTab('review')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${activeTab === 'review' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>
-                  Review
-                  {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">{pendingCount}</span>}
+                <button
+                  onClick={() => setActiveTab('progress')}
+                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${activeTab === 'progress' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Progress
                 </button>
-                <button onClick={() => setActiveTab('metrics')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>Stats</button>
-                <button onClick={() => setActiveTab('storage')} className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${activeTab === 'storage' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}>
+                <button
+                  onClick={() => setActiveTab('review')}
+                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${activeTab === 'review' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Review
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-900 text-xs font-bold rounded-full flex items-center justify-center">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab('metrics')}
+                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors ${activeTab === 'metrics' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Stats
+                </button>
+                <button
+                  onClick={() => setActiveTab('storage')}
+                  className={`flex-1 px-2 py-2 text-xs font-medium uppercase tracking-wide transition-colors relative ${activeTab === 'storage' ? 'text-slate-200 border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
+                >
                   <HardDrive className="w-3 h-3 inline mr-1" />
                   Storage
                   {hasStorageData && activeTab !== 'storage' && (
@@ -698,7 +900,17 @@ function App(): ReactElement {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {activeTab === 'progress' && <ProgressPanel />}
-                {activeTab === 'review' && <ReviewPanel onComplete={async () => { setPendingCount(0); for (const folder of folders) { const newEntries = await window.api.fs.listDir(folder.path); useAppStore.getState().updateFolderEntries(folder.path, newEntries) }}} />}
+                {activeTab === 'review' && (
+                  <ReviewPanel
+                    onComplete={async () => {
+                      setPendingCount(0)
+                      for (const folder of folders) {
+                        const newEntries = await window.api.fs.listDir(folder.path)
+                        useAppStore.getState().updateFolderEntries(folder.path, newEntries)
+                      }
+                    }}
+                  />
+                )}
                 {activeTab === 'metrics' && <MetricsPanel />}
                 {activeTab === 'storage' && <StoragePanel />}
               </div>
@@ -709,10 +921,7 @@ function App(): ReactElement {
 
       {/* Before/After Visualization Modal */}
       {beforeAfterResult && (
-        <BeforeAfterView
-          result={beforeAfterResult}
-          onClose={hideBeforeAfter}
-        />
+        <BeforeAfterView result={beforeAfterResult} onClose={hideBeforeAfter} />
       )}
     </div>
   )

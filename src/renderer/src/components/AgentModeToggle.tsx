@@ -1,5 +1,6 @@
-import { Bot, Zap, Loader2 } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import { useAgentStore } from '../stores/agentStore'
+import momentumLogo from '../assets/momentum.png'
 
 export default function AgentModeToggle() {
   const { mode, status, setMode } = useAgentStore()
@@ -15,14 +16,14 @@ export default function AgentModeToggle() {
 
       // Stop the watcher
       try {
-        await window.api.watcher.stop()
+        await window.api.watcher.stopAll()
       } catch (err) {
         console.error('Failed to stop Orbits:', err)
       }
     }
 
     // Toggle mode
-    setMode(isAgent ? 'normal' : 'agent')
+    setMode(isAgent ? 'chat' : 'agent')
   }
 
   return (
@@ -43,7 +44,7 @@ export default function AgentModeToggle() {
       }
     >
       {/* Icon */}
-      {isAgent ? <Bot className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+      {isAgent ? <Bot className="w-4 h-4" /> : <img src={momentumLogo} alt="" className="w-4 h-4 object-contain" />}
 
       {/* Label */}
       <span className="hidden sm:inline">{isAgent ? 'Orbit Mode' : 'Chat'}</span>
