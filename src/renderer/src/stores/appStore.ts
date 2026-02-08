@@ -208,14 +208,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Folder actions
   addFolder: (folder) => {
     const { folders } = get()
-    if (folders.some(f => f.path === folder.path)) return
+    if (folders.some((f) => f.path === folder.path)) return
     set({ folders: [...folders, folder] })
   },
 
   removeFolder: (path) => {
     const { folders, selectedFile } = get()
     set({
-      folders: folders.filter(f => f.path !== path),
+      folders: folders.filter((f) => f.path !== path),
       selectedFile: selectedFile?.path.startsWith(path) ? null : selectedFile
     })
   },
@@ -223,7 +223,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateFolderEntries: (path, entries) => {
     const { folders } = get()
     set({
-      folders: folders.map(f => f.path === path ? { ...f, entries } : f)
+      folders: folders.map((f) => (f.path === path ? { ...f, entries } : f))
     })
   },
 
@@ -291,7 +291,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const { selectedFiles } = get()
     const newSelection = new Set(selectedFiles)
-    rangePaths.forEach(path => newSelection.add(path))
+    rangePaths.forEach((path) => newSelection.add(path))
 
     set({
       selectedFiles: newSelection,
@@ -396,9 +396,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       currentTask: {
         ...currentTask,
-        steps: currentTask.steps.map(s =>
-          s.id === stepId ? { ...s, ...updates } : s
-        )
+        steps: currentTask.steps.map((s) => (s.id === stepId ? { ...s, ...updates } : s))
       }
     })
   },
@@ -427,7 +425,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Highlighting actions
   highlightFiles: (paths, type, duration = 3000) => {
     const expiresAt = Date.now() + duration
-    const newHighlights: HighlightedFile[] = paths.map(path => ({
+    const newHighlights: HighlightedFile[] = paths.map((path) => ({
       path,
       type,
       expiresAt
@@ -436,7 +434,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Merge with existing highlights (replace if same path)
     const { highlightedFiles } = get()
     const existingPaths = new Set(paths)
-    const filtered = highlightedFiles.filter(h => !existingPaths.has(h.path))
+    const filtered = highlightedFiles.filter((h) => !existingPaths.has(h.path))
 
     set({ highlightedFiles: [...filtered, ...newHighlights] })
 
@@ -445,7 +443,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const { highlightedFiles } = get()
       const now = Date.now()
       set({
-        highlightedFiles: highlightedFiles.filter(h => h.expiresAt > now)
+        highlightedFiles: highlightedFiles.filter((h) => h.expiresAt > now)
       })
     }, duration + 100)
   },
@@ -455,7 +453,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   getHighlightType: (path) => {
     const { highlightedFiles } = get()
     const now = Date.now()
-    const highlight = highlightedFiles.find(h => h.path === path && h.expiresAt > now)
+    const highlight = highlightedFiles.find((h) => h.path === path && h.expiresAt > now)
     return highlight?.type || null
   },
 

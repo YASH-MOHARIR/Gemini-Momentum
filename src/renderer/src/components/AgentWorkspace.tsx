@@ -11,7 +11,6 @@ import {
   XCircle,
   MinusCircle,
   ArrowRight,
-  Bot,
   Folder,
   MousePointer,
   Settings,
@@ -24,13 +23,13 @@ import {
   FileText,
   Sparkles,
   Orbit,
-  Pencil
+  Pencil,
+  Mail
 } from 'lucide-react'
 import { useAgentStore, AgentConfig, AgentRule, ActivityEntry } from '../stores/agentStore'
+import { useEmailStore } from '../stores/emailStore'
+import EmailWatcherCard from './EmailWatcher/EmailWatcherCard'
 
-const MAX_RULES = 5
-const MAX_CHARS = 200
-const MAX_WATCHERS = 5
 
 const EXAMPLE_RULES = [
   'PDFs go to Documents folder',
@@ -55,7 +54,7 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     id: 'downloads',
     name: 'Downloads Organizer',
     icon: <Download className="w-4 h-4" />,
-    description: 'Sort files by type automatically',
+    description: 'The ultimate cleaner for your Downloads folder. It automatically categorizes every file you download into specific folders (Documents, Images, Videos, Archives, Installers) based on file extension, keeping your workspace spotless.',
     color: 'bg-sky-600 hover:bg-sky-500',
     defaultFolders: ['Downloads'],
     rules: [
@@ -70,7 +69,7 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     id: 'receipts',
     name: 'Receipt Processor',
     icon: <Receipt className="w-4 h-4" />,
-    description: 'AI-powered receipt organization',
+    description: 'An AI-powered assistant for your finances. It intelligently detects receipts, invoices, and bills, renames them using the vendor name, date, and total amount (e.g., "Uber_2023-10-12_$25.00"), and files them into an Expenses folder for easy reporting.',
     color: 'bg-emerald-600 hover:bg-emerald-500',
     defaultFolders: ['Receipts'],
     rules: [
@@ -82,16 +81,16 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     id: 'screenshots',
     name: 'Screenshot Manager',
     icon: <Camera className="w-4 h-4" />,
-    description: 'Keep desktop clean',
+    description: 'Stop your desktop from becoming a mess of screenshots. This agent instantly detects new screen captures and recordings, moving them to dedicated "Screenshots" and "Recordings" folders so your desktop remains clean and organized.',
     color: 'bg-purple-600 hover:bg-purple-500',
     defaultFolders: ['Desktop'],
     rules: ['Screenshots to Screenshots folder', 'Screen recordings to Recordings folder']
   },
   {
     id: 'documents',
-    name: 'Document Filer',
+    name: 'Document Archiver',
     icon: <FileText className="w-4 h-4" />,
-    description: 'Archive old documents',
+    description: 'Ideal for shared drives or busy project folders. It identifies files that haven\'t been opened in over 6 months and moves them to an "Archive" folder. It also segregates large files (>100MB) to help you manage disk space effectively.',
     color: 'bg-amber-600 hover:bg-amber-500',
     defaultFolders: ['Documents'],
     rules: [
@@ -128,7 +127,7 @@ function getFolderName(path: string): string {
   return path.split(/[/\\]/).pop() || path
 }
 
-function ActivityItem({ entry }: { entry: ActivityEntry }) {
+function ActivityItem({ entry }: { entry: ActivityEntry }): React.ReactElement {
   const statusConfig = {
     moved: { icon: CheckCircle, color: 'text-emerald-400', bgClass: 'bg-emerald-900/10' },
     renamed: { icon: CheckCircle, color: 'text-emerald-400', bgClass: 'bg-emerald-900/10' },
@@ -175,7 +174,7 @@ function TemplateSelector({
   onSelectTemplate
 }: {
   onSelectTemplate: (template: WatcherTemplate) => void
-}) {
+}): React.ReactElement {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
       {WATCHER_TEMPLATES.map((template) => (
@@ -199,7 +198,7 @@ function TemplateSelector({
   )
 }
 
-function WatcherCard({ watcherId }: { watcherId: string }) {
+function WatcherCard({ watcherId }: { watcherId: string }): React.ReactElement | null {
   const {
     watchers,
     setWatcherStatus,
@@ -207,8 +206,8 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
     removeWatcher,
     startFolderSelect,
     getWatcherDuration,
-    folderSelectMode,
-    pendingFolderSelect
+    addWatcherActivity,
+    incrementWatcherStat
   } = useAgentStore()
 
   const watcher = watchers.get(watcherId)
@@ -218,8 +217,6 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   const status = watcher?.status || 'idle'
   const stats = watcher?.stats || { filesProcessed: 0, aiCalls: 0, errors: 0 }
   const recentActivity = watcher?.recentActivity || []
-
-  const selectingForWatcherId = pendingFolderSelect?.watcherId
 
   const [isExpanded, setIsExpanded] = useState(status === 'running' || status === 'idle')
   const [isEditing, setIsEditing] = useState(
@@ -241,10 +238,8 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   const isRunning = status === 'running' || status === 'paused'
   const isPaused = status === 'paused'
 
-  // If watcher doesn't exist (e.g. deleted), return null AFTER hooks created
-  if (!watcher) return null
-
   useEffect(() => {
+    if (!watcher) return
     const storeWatcher = watchers.get(watcherId)
     if (
       storeWatcher &&
@@ -262,7 +257,43 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
     return () => clearInterval(interval)
   }, [status, watcherId, getWatcherDuration])
 
-  // ... (useEffect for Activity remains same)
+  // Agent Workspace Activity listener
+  useEffect(() => {
+    const unsubProcessed = window.api.watcher.onFileProcessed((id, entry) => {
+      if (id === watcherId) {
+        addWatcherActivity(watcherId, entry)
+        if (entry.action !== 'error' && entry.action !== 'skipped') {
+          incrementWatcherStat(watcherId, 'filesProcessed')
+          if (entry.usedAI) incrementWatcherStat(watcherId, 'aiCalls')
+        } else if (entry.action === 'error') {
+          incrementWatcherStat(watcherId, 'errors')
+        }
+      }
+    })
+
+    const unsubError = window.api.watcher.onError((id, error) => {
+      if (id === watcherId) {
+        addWatcherActivity(watcherId, {
+          id: Date.now().toString(),
+          watcherId,
+          timestamp: new Date().toISOString(),
+          originalName: 'System',
+          originalPath: '',
+          action: 'error',
+          error,
+          usedAI: false
+        })
+        incrementWatcherStat(watcherId, 'errors')
+      }
+    })
+
+    return () => {
+      unsubProcessed()
+      unsubError()
+    }
+  }, [watcherId, addWatcherActivity, incrementWatcherStat])
+
+  if (!watcher) return null
 
   const handleStart = async () => {
     const activeRules = localRules.filter((r) => r.text.trim())
@@ -379,7 +410,7 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
       setLocalRules([
         ...localRules,
         {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           text: EXAMPLE_RULES[index],
           enabled: true,
           order: localRules.length + 1
@@ -437,11 +468,12 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
                   onClick={() => setIsEditingName(true)}
                   title="Click to edit name"
                 >
-                  {localName || (() => {
-                    if (localWatchFolders.length === 0) return 'New Orbit'
-                    if (localWatchFolders.length === 1) return getFolderName(localWatchFolders[0])
-                    return `${getFolderName(localWatchFolders[0])} +${localWatchFolders.length - 1}`
-                  })()}
+                  {localName ||
+                    (() => {
+                      if (localWatchFolders.length === 0) return 'New Orbit'
+                      if (localWatchFolders.length === 1) return getFolderName(localWatchFolders[0])
+                      return `${getFolderName(localWatchFolders[0])} +${localWatchFolders.length - 1}`
+                    })()}
                 </div>
                 <button
                   onClick={() => setIsEditingName(true)}
@@ -482,8 +514,8 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
               </button>
               <button
                 onClick={() => setIsEditing(!isEditing)}
-                className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Edit"
+                className="p-1.5 rounded-md hover:bg-slate-600 text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10"
+                title="Edit Orbit Settings"
               >
                 <Settings className="w-4 h-4" />
               </button>
@@ -746,11 +778,13 @@ function WatcherCard({ watcherId }: { watcherId: string }) {
   )
 }
 
+const MAX_RULES = 10
+const MAX_CHARS = 100
+
 export default function AgentWorkspace() {
   const {
     watchers,
     createWatcher,
-    canAddWatcher,
     folderSelectMode,
     cancelFolderSelect,
     updateWatcherConfig
@@ -759,6 +793,44 @@ export default function AgentWorkspace() {
   const watcherIds = Array.from(watchers.keys())
   const isSelectingFolder = folderSelectMode !== 'none'
   const [showTemplates, setShowTemplates] = useState(watcherIds.length === 0)
+  const [activeTab, setActiveTab] = useState<'files' | 'emails'>('files')
+  // Email Store
+  const emailWatchers = useEmailStore((state) => state.watchers)
+  const loadEmailWatchers = useEmailStore((state) => state.loadWatchers)
+  const createEmailWatcher = useEmailStore((state) => state.createWatcher)
+
+  useEffect(() => {
+    if (activeTab === 'emails') {
+      loadEmailWatchers()
+    }
+  }, [activeTab, loadEmailWatchers])
+
+  /* Email Watcher Logic */
+  const [isCreatingWatcher, setIsCreatingWatcher] = useState(false)
+
+  const handleCreateEmailWatcher = async () => {
+    if (isCreatingWatcher) return
+    setIsCreatingWatcher(true)
+    
+    try {
+      const id = `email-watcher-${Date.now()}`
+      await createEmailWatcher({
+        id,
+        name: 'New Email Watcher',
+        checkInterval: 60 * 60 * 1000,
+        rules: [],
+        categories: ['important'],
+        actions: {
+          important: ['notify']
+        }
+      })
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Failed to create watcher. Please try causing a check for duplicate IDs or watcher limit.')
+    } finally {
+      setIsCreatingWatcher(false)
+    }
+  }
 
   const handleCreateWatcher = () => {
     const newId = `watcher-${Date.now()}`
@@ -824,66 +896,163 @@ export default function AgentWorkspace() {
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-4xl mx-auto space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-emerald-400 flex items-center gap-2">
-                <Orbit className="w-6 h-6" />
-                Orbits ({watcherIds.length}/{MAX_WATCHERS})
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Orbits are AI-powered file watchers that continuously monitor folders and
-                automatically organize, rename, and process files based on your rules. Create up to{' '}
-                {MAX_WATCHERS} Orbits to manage different folders simultaneously.
+          {/* Header & Tabs */}
+          {/* Header & Tabs */}
+          {/* Header & Tabs */}
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-6 gap-6">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                {activeTab === 'files' ? (
+                  <>
+                    <Orbit className="w-8 h-8 text-emerald-500 shrink-0" />
+                    <span className="truncate">File Orbits</span>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-8 h-8 text-blue-500 shrink-0" />
+                    <span className="truncate">Email Watchers</span>
+                  </>
+                )}
+              </h1>
+              <p className="text-slate-400 mt-2 text-sm leading-relaxed max-w-2xl">
+                {activeTab === 'files' ? (
+                  'Autonomous background agents that verify, organize, and manage your local files 24/7.'
+                ) : (
+                  'Monitor your inbox for specific emails (e.g. receipts, jobs), categorize them with AI, and automate actions like notifications.'
+                )}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {watcherIds.length > 0 && (
+
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto shrink-0 min-w-0">
+              <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full sm:w-auto overflow-hidden gap-1">
                 <button
-                  onClick={() => setShowTemplates(!showTemplates)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${showTemplates ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                  onClick={() => setActiveTab('files')}
+                  className={`flex-1 sm:flex-none px-3 md:px-6 py-2 rounded-md text-sm font-medium transition-all text-center whitespace-nowrap truncate ${activeTab === 'files' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}
                 >
-                  <Sparkles className="w-4 h-4" />
-                  Templates
+                  File Orbits
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('emails')
+                    setShowTemplates(false)
+                  }}
+                  className={`flex-1 sm:flex-none px-3 md:px-6 py-2 rounded-md text-sm font-medium transition-all text-center whitespace-nowrap truncate ${activeTab === 'emails' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}
+                >
+                  Email Watchers
+                </button>
+              </div>
+
+              {activeTab === 'files' ? (
+                <button
+                  onClick={() => {
+                    setShowTemplates(true)
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors font-medium shadow-lg shadow-emerald-900/20 whitespace-nowrap w-full sm:w-auto"
+                >
+                  <Plus className="w-5 h-5" />
+                  New Orbit
+                </button>
+              ) : (
+                <button
+                  onClick={handleCreateEmailWatcher}
+                  disabled={isCreatingWatcher}
+                  className={`flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-blue-900/20 whitespace-nowrap w-full sm:w-auto ${isCreatingWatcher ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {isCreatingWatcher ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <Plus size={16} />}
+                  Add Email Watcher
                 </button>
               )}
-              <button
-                onClick={handleCreateWatcher}
-                disabled={!canAddWatcher()}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                Custom
-              </button>
             </div>
           </div>
 
-          {(showTemplates || watcherIds.length === 0) && canAddWatcher() && (
-            <TemplateSelector onSelectTemplate={handleSelectTemplate} />
-          )}
+          {activeTab === 'files' ? (
+            <>
+              {/* File Watchers Content */}
+              {showTemplates ? (
+                <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-slate-200">Choose a Template</h2>
+                    {watcherIds.length > 0 && (
+                      <button
+                        onClick={() => setShowTemplates(false)}
+                        className="text-slate-400 hover:text-slate-200 transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                  <TemplateSelector onSelectTemplate={handleSelectTemplate} />
 
-          {watcherIds.length === 0 && !showTemplates ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mb-4">
-                <Folder className="w-8 h-8 text-slate-500" />
-              </div>
-              <h3 className="text-lg font-medium text-slate-400 mb-1">No Orbits Yet</h3>
-              <p className="text-sm text-slate-500 max-w-md mb-4">
-                Create your first Orbit to start automatically organizing files. Each Orbit watches
-                a folder and applies your custom rules using AI.
-              </p>
-              <button
-                onClick={() => setShowTemplates(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
-              >
-                <Sparkles className="w-5 h-5" />
-                Choose a Template
-              </button>
-            </div>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-700"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-2 bg-slate-900 text-slate-500">
+                        Or start from scratch
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-center">
+                    <button
+                      onClick={handleCreateWatcher}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-300 rounded-lg transition-all"
+                    >
+                      <Sparkles className="w-4 h-4 text-emerald-400" />
+                      Create Blank Orbit
+                    </button>
+                  </div>
+                </div>
+              ) : watcherIds.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="inline-flex p-4 rounded-full bg-slate-800 mb-4">
+                    <Orbit className="w-8 h-8 text-slate-500" />
+                  </div>
+                  <h3 className="text-lg font-medium text-slate-300 mb-2">No Orbits Active</h3>
+                  <p className="text-slate-500 mb-6 max-w-sm mx-auto">
+                    Create an orbit to automatically organize your files using AI.
+                  </p>
+                  <button
+                    onClick={() => setShowTemplates(true)}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Create First Orbit
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {watcherIds.map((id) => (
+                    <WatcherCard key={id} watcherId={id} />
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="space-y-3">
-              {watcherIds.map((watcherId) => (
-                <WatcherCard key={watcherId} watcherId={watcherId} />
-              ))}
+            /* Email Watchers Content */
+            <div className="grid grid-cols-1 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              {emailWatchers.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="inline-flex p-4 rounded-full bg-slate-800 mb-4">
+                    <Mail size={32} className="text-slate-500" />
+                  </div>
+                  <h3 className="text-lg font-medium text-slate-300 mb-2">No Email Watchers</h3>
+                  <p className="text-slate-500 mb-6 max-w-sm mx-auto">
+                    Create a watcher to monitor your inbox for jobs, receipts, and more.
+                  </p>
+                  <button
+                    onClick={handleCreateEmailWatcher}
+                    disabled={isCreatingWatcher}
+                    className={`px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded-lg transition-colors font-medium shadow-lg shadow-blue-900/20 ${isCreatingWatcher ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isCreatingWatcher ? 'Creating...' : 'Create First Watcher'}
+                  </button>
+                </div>
+              ) : (
+                emailWatchers.map((watcher) => (
+                  <EmailWatcherCard key={watcher.id} watcher={watcher} />
+                ))
+              )}
             </div>
           )}
         </div>

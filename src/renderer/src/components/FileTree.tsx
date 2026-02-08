@@ -187,8 +187,8 @@ function FileTreeItem({
 
   // Helper function to get all visible paths for range selection
   const getAllVisiblePaths = (currentEntry: FileEntry): string[] => {
-     if (!siblings) return [currentEntry.path]
-     return siblings.map((s) => s.path)
+    if (!siblings) return [currentEntry.path]
+    return siblings.map((s) => s.path)
   }
 
   // Determine styling based on mode and highlight
@@ -222,7 +222,7 @@ function FileTreeItem({
     if (highlightType === 'update') return 'text-blue-400'
     if (isMultiSelected) return 'text-sky-400'
     if (highlightFolders && isFolder) {
-       return isActive ? 'text-emerald-400' : 'text-slate-500'
+      return isActive ? 'text-emerald-400' : 'text-slate-500'
     }
     if (isFolder) return 'text-sky-400'
     return 'text-slate-400'
@@ -240,7 +240,11 @@ function FileTreeItem({
             isLoading ? (
               <span className="w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
             ) : highlightFolders ? (
-              isActive ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <MousePointer className="w-3.5 h-3.5 text-slate-600" />
+              isActive ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <MousePointer className="w-3.5 h-3.5 text-slate-600" />
+              )
             ) : isExpanded ? (
               <ChevronDown className="w-4 h-4 text-slate-500" />
             ) : (
