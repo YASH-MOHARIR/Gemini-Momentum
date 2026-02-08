@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } f
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import Store from 'electron-store'
-import icon from '../../resources/icon.png?asset'
+import icon from '../../resources/momentum.png?asset'
 import * as fileSystem from './services/fileSystem'
 import * as gemini from './services/gemini'
 import * as pendingActions from './services/pendingActions'
@@ -10,6 +10,7 @@ import * as googleAuth from './services/googleAuth'
 import * as googleSheets from './services/googleSheets'
 import * as gmail from './services/gmail'
 import * as fileWatcher from './services/fileWatcher'
+import * as emailWatcher from './services/emailWatcher'
 import { initRuleProcessor } from './services/ruleProcessor'
 import { config } from 'dotenv'
 
@@ -501,6 +502,66 @@ ipcMain.handle('watcher:update-rules', (_, watcherId: string, rules: fileWatcher
   return fileWatcher.updateRules(watcherId, rules)
 })
 
+// ============ Email Watcher Handlers ============
+
+ipcMain.handle('email:start-watcher', (_, config: emailWatcher.EmailWatcherConfig) => {
+  if (!mainWindow) return { success: false, error: 'Main window not available' }
+  return emailWatcher.startEmailWatcher(config, mainWindow)
+})
+
+ipcMain.handle(
+  'email:update-watcher',
+  (_, watcherId: string, updates: Partial<emailWatcher.EmailWatcherConfig>) => {
+    return emailWatcher.startEmailWatcher(
+      { ...emailWatcher.getWatcher(watcherId)!.config, ...updates },
+      mainWindow!
+    )
+  }
+)
+
+ipcMain.handle('email:stop-watcher', (_, watcherId: string) => {
+  return emailWatcher.stopEmailWatcher(watcherId)
+})
+
+ipcMain.handle('email:pause-watcher', (_, watcherId: string) => {
+  return emailWatcher.pauseEmailWatcher(watcherId)
+})
+
+ipcMain.handle('email:resume-watcher', (_, watcherId: string) => {
+  return emailWatcher.resumeEmailWatcher(watcherId)
+})
+
+ipcMain.handle('email:delete-watcher', (_, watcherId: string) => {
+  return emailWatcher.deleteEmailWatcher(watcherId)
+})
+
+ipcMain.handle('email:get-status', (_, watcherId: string) => {
+  return emailWatcher.getEmailWatcherStatus(watcherId)
+})
+
+ipcMain.handle('email:get-all-watchers', () => {
+  return emailWatcher.getAllEmailWatchers()
+})
+
+ipcMain.handle('email:manual-check', (_, watcherId: string) => {
+  return emailWatcher.manualCheckEmails(watcherId)
+})
+
+ipcMain.handle('email:get-matches', (_, watcherId: string) => {
+  return emailWatcher.getMatches(watcherId)
+})
+
+ipcMain.handle('email:get-activity', (_, watcherId: string) => {
+  return emailWatcher.getActivity(watcherId)
+})
+
+ipcMain.handle(
+  'email:delete-message',
+  (_, watcherId: string, messageId: string, fromGmail: boolean) => {
+    return emailWatcher.deleteMessage(watcherId, messageId, fromGmail)
+  }
+)
+
 // ============ App Lifecycle ============
 
 app.whenReady().then(() => {
@@ -542,6 +603,9 @@ app.whenReady().then(() => {
   createWindow()
   createTray()
   setupWatcherStatusUpdates()
+
+  // Initialize Email Watcher Service (loads persistent watchers)
+  emailWatcher.initEmailService(mainWindow!)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
