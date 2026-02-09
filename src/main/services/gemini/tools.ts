@@ -411,8 +411,8 @@ Requires: User must be signed into Google.`,
   },
   {
     name: 'download_gmail_receipts',
-    description: `Search Gmail for receipt/invoice emails and download their attachments.
-Automatically filters for PDF and image attachments.
+    description: `Search Gmail for emails with attachments and download them. Use this ONLY if the user explicitly asks to "download" files or receipts.
+For creating expense reports from emails (including text bodies), use gmail_to_expense_report instead.
 Requires: User must be signed into Google.`,
     parameters: {
       type: 'OBJECT',
@@ -426,20 +426,25 @@ Requires: User must be signed into Google.`,
   },
   {
     name: 'gmail_to_expense_report',
-    description: `Complete workflow: Search Gmail for receipts, download attachments, analyze with Vision, and create expense report in Google Sheets.
-This is the full "Gmail → Sheets" pipeline in one command.
+    description: `Complete workflow: Search Gmail for receipts (in attachments OR email body), analyze with Vision/LLM, and create expense report in Google Sheets.
+Use this for any request to process bills, receipts, or invoices from email, even if they are just text in the email body.
+Do NOT assume you need 'has:attachment' in the query unless explicitly asked.
 Requires: User must be signed into Google.`,
     parameters: {
       type: 'OBJECT',
       properties: {
         gmail_query: {
           type: 'STRING',
-          description: 'Gmail search query (e.g., "after:2024/01/01")'
+          description: 'Gmail search query. Use broad keywords if user is vague (e.g., "(receipt OR invoice OR order OR bill) after:2024/01/01"). Only use specific terms if user asks.'
         },
         report_title: { type: 'STRING', description: 'Title for the expense report' },
         category_hint: {
           type: 'STRING',
           description: 'Optional category hint (e.g., "business travel")'
+        },
+        itemized: {
+          type: 'BOOLEAN',
+          description: 'If true, creates a report with individual line items (name, qty, price) instead of just receipt totals. Use when user asks for "item details", "line items", "what I bought", etc.'
         }
       },
       required: ['gmail_query', 'report_title']

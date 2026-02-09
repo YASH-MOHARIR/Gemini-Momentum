@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import * as path from 'path'
 import * as fs from 'fs/promises'
+import { MODELS } from './gemini/client'
 
 // ============ Types ============
 
@@ -161,7 +162,7 @@ RESPOND WITH JSON ONLY (no markdown, no explanation):
 }`
 
   const model = client!.getGenerativeModel({
-    model: 'gemini-2.0-flash-exp',
+    model: MODELS.FLASH,
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 500
@@ -227,7 +228,7 @@ RESPOND WITH JSON ONLY (no markdown):
 }`
 
   const model = client!.getGenerativeModel({
-    model: 'gemini-2.0-flash-exp',
+    model: MODELS.FLASH,
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 500
@@ -278,7 +279,7 @@ RESPOND WITH JSON ONLY:
 }`
 
   const model = client!.getGenerativeModel({
-    model: 'gemini-2.0-flash-exp',
+    model: MODELS.FLASH,
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 300

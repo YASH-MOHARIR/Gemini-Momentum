@@ -69,6 +69,11 @@ interface ReceiptData {
   amount: number
   category: string
   description: string
+  items?: Array<{
+    description: string
+    qty: number
+    price: number
+  }>
   filePath: string
 }
 
@@ -99,7 +104,10 @@ Return ONLY a valid JSON object with these exact fields:
   "date": "YYYY-MM-DD format",
   "amount": numeric_total_amount,
   "category": "Food" | "Transport" | "Office" | "Entertainment" | "Utilities" | "Shopping" | "Travel" | "Other",
-  "description": "brief description of purchase"
+  "description": "brief description of purchase",
+  "items": [
+    { "description": "item name", "qty": 1, "price": 10.00 }
+  ]
 }
 
 If you cannot determine a field, use reasonable defaults:
@@ -108,6 +116,7 @@ If you cannot determine a field, use reasonable defaults:
 - amount: 0
 - category: "Other"
 - description: "Receipt"
+- items: []
 ${categoryContext}
 
 Return ONLY the JSON object, no other text.`
@@ -137,10 +146,84 @@ Return ONLY the JSON object, no other text.`
       amount: typeof data.amount === 'number' ? data.amount : parseFloat(data.amount) || 0,
       category: data.category || 'Other',
       description: data.description || 'Receipt',
+      items: data.items || [],
       filePath: imagePath
     }
   } catch (error) {
     console.error(`[RECEIPT] Failed to extract data from ${imagePath}:`, error)
+    return null
+  }
+}
+
+export async function extractReceiptDataFromText(
+  text: string,
+  categoryHint?: string
+): Promise<ReceiptData | null> {
+  const client = getClient()
+
+  try {
+    const model = client.getGenerativeModel({
+      model: MODELS.FLASH,
+      generationConfig: {
+        temperature: 0.1
+      }
+    })
+
+    const categoryContext = categoryHint ? `\nCategory hint: ${categoryHint}` : ''
+
+    const prompt = `Analyze this email text (subject and body) and identify if it contains bill/receipt information.
+If it does, extract the following information into a valid JSON object.
+{
+  "vendor": "store or company name",
+  "date": "YYYY-MM-DD format",
+  "amount": numeric_total_amount,
+  "category": "Food" | "Transport" | "Office" | "Entertainment" | "Utilities" | "Shopping" | "Travel" | "Other",
+  "description": "brief description of purchase",
+  "items": [
+    { "description": "item name", "qty": 1, "price": 10.00 }
+  ]
+}
+
+If you cannot determine a field, use reasonable defaults.
+If this is clearly NOT a bill/receipt/invoice, return null.
+
+Text to analyze:
+${text.substring(0, 10000)}
+
+${categoryContext}
+
+Return ONLY the JSON object, no other text.`
+
+    const result = await model.generateContent([{ text: prompt }])
+
+    const responseText = result.response.text()
+    console.log(`[RECEIPT-TEXT] Raw response: ${responseText.substring(0, 200)}`)
+
+    // Parse JSON from response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      console.log(`[RECEIPT-TEXT] No JSON found in response`)
+      return null
+    }
+
+    const data = JSON.parse(jsonMatch[0])
+
+    // Validate minimal requirements (e.g. amount or vendor) to assume it's a receipt
+    if (!data.amount && data.vendor === 'Unknown') {
+      return null
+    }
+
+    return {
+      vendor: data.vendor || 'Unknown',
+      date: data.date || new Date().toISOString().split('T')[0],
+      amount: typeof data.amount === 'number' ? data.amount : parseFloat(data.amount) || 0,
+      category: data.category || 'Other',
+      description: data.description || 'Receipt',
+      items: data.items || [],
+      filePath: 'email-body' // Placeholder
+    }
+  } catch (error) {
+    console.error(`[RECEIPT-TEXT] Failed to extract data from text:`, error)
     return null
   }
 }

@@ -1,5 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { app } from 'electron'
+import * as path from 'path'
+import * as fs from 'fs/promises'
 import * as fileSystem from '../fileSystem'
 import * as spreadsheet from '../spreadsheet'
 import * as fileOrganizer from '../fileOrganizer'
@@ -13,7 +15,8 @@ import {
   processReceiptsBatch,
   smartRenameFile,
   categorizeImages,
-  extractReceiptData
+  extractReceiptData,
+  extractReceiptDataFromText
 } from './vision'
 
 // ============ TOOL EXECUTOR ============
@@ -293,93 +296,139 @@ export async function executeTool(
         }
 
         try {
-          // Step 1: Download receipts from Gmail
-          const tempDir = require('path').join(app.getPath('userData'), 'gmail-receipts-temp')
-          await require('fs/promises').mkdir(tempDir, { recursive: true })
+          // Step 1: Download receipts AND fetch email bodies
+          const tempDir = path.join(app.getPath('userData'), 'gmail-receipts-temp')
+          await fs.mkdir(tempDir, { recursive: true })
 
-          console.log('[GMAIL→SHEETS] Step 1: Downloading receipts from Gmail...')
-          const downloadResult = await gmail.searchAndDownloadReceipts(
+          console.log('[GMAIL→SHEETS] Step 1: Searching emails and downloading attachments...')
+          console.log('[GMAIL→SHEETS] Step 1: Searching emails with query:', args.gmail_query)
+
+          // Use the new function that gets bodies too
+          const searchResult = await gmail.searchAndProcessEmails(
             args.gmail_query,
             tempDir,
             30
           )
 
-          if (!downloadResult.success || downloadResult.attachmentsDownloaded.length === 0) {
+          if (!searchResult.success || searchResult.processedEmails.length === 0) {
             result = {
               success: false,
-              error: downloadResult.error || 'No receipt attachments found in matching emails'
+              error: searchResult.error || 'No matching emails found'
             }
             break
           }
 
           console.log(
-            `[GMAIL→SHEETS] Downloaded ${downloadResult.attachmentsDownloaded.length} attachments`
+            `[GMAIL→SHEETS] Processing ${searchResult.processedEmails.length} emails...`
           )
 
-          // Step 2: Process each receipt with Vision
-          console.log('[GMAIL→SHEETS] Step 2: Analyzing receipts with Vision...')
+          // Step 2: Process each email (attachments OR body)
+          console.log('[GMAIL→SHEETS] Step 2: Analyze content with Vision/LLM...')
           const expenses: Array<{
             vendor: string
             date: string
             category: string
             description: string
             amount: number
+            items?: Array<{ description: string; qty: number; price: number }>
           }> = []
 
-          for (const att of downloadResult.attachmentsDownloaded) {
-            // Only process images (PDFs would need different handling)
-            if (att.mimeType.includes('image')) {
-              try {
-                const receiptData = await extractReceiptData(att.localPath, args.category_hint)
-                if (receiptData) {
-                  expenses.push({
-                    vendor: receiptData.vendor,
-                    date: receiptData.date,
-                    category: receiptData.category,
-                    description: receiptData.description,
-                    amount: receiptData.amount
-                  })
+          let attachmentsProcessed = 0
+          let bodiesProcessed = 0
+
+          for (const email of searchResult.processedEmails) {
+            let emailHasExpense = false
+
+            // 2a. Process Attachments first
+            if (email.attachments && email.attachments.length > 0) {
+              for (const att of email.attachments) {
+                if (att.mimeType.includes('image')) {
+                  try {
+                    const receiptData = await extractReceiptData(att.localPath, args.category_hint)
+                    if (receiptData) {
+                      expenses.push({
+                        vendor: receiptData.vendor,
+                        date: receiptData.date,
+                        category: receiptData.category,
+                        description: receiptData.description,
+                        amount: receiptData.amount,
+                        items: receiptData.items
+                      })
+                      emailHasExpense = true
+                      attachmentsProcessed++
+                    }
+                  } catch (err) {
+                    console.error(`[GMAIL→SHEETS] Failed to process attachment ${att.filename}:`, err)
+                  }
+                  await new Promise((r) => setTimeout(r, 500))
                 }
-              } catch (err) {
-                console.error(`[GMAIL→SHEETS] Failed to process ${att.filename}:`, err)
               }
-              // Rate limit
-              await new Promise((r) => setTimeout(r, 500))
+            }
+
+            // 2b. If no expense found, try body
+            if (!emailHasExpense && email.body && email.body.length > 50) {
+               try {
+                 console.log(`[GMAIL→SHEETS] Analyzing body of email: ${email.subject}`)
+                 const textData = await extractReceiptDataFromText(
+                   `Subject: ${email.subject}\nFrom: ${email.from}\nDate: ${email.date}\n\n${email.body}`,
+                   args.category_hint
+                 )
+                 
+                 if (textData) {
+                    expenses.push({
+                      vendor: textData.vendor,
+                      date: textData.date,
+                      category: textData.category,
+                      description: textData.description,
+                      amount: textData.amount,
+                      items: textData.items
+                    })
+                    bodiesProcessed++
+                 }
+               } catch (err) {
+                 console.error(`[GMAIL→SHEETS] Failed to process email body for ${email.id}:`, err)
+               }
+               await new Promise((r) => setTimeout(r, 500))
             }
           }
 
           if (expenses.length === 0) {
             result = {
               success: false,
-              error: 'Could not extract data from any receipts'
+              error: 'Could not extract data from any emails'
             }
             break
           }
 
           console.log(
-            `[GMAIL→SHEETS] Step 3: Creating Google Sheet with ${expenses.length} expenses...`
+            `[GMAIL→SHEETS] Step 3: Creating Sheet with ${expenses.length} expenses...`
           )
 
-          // Step 3: Create Google Sheet
-          const sheetResult = await googleSheets.createExpenseReportSheet(
-            args.report_title,
-            expenses
-          )
+          // Step 3: Create Google Sheet (Itemized or Standard)
+          let sheetResult
+          if (args.itemized) {
+             sheetResult = await googleSheets.createItemizedExpenseReportSheet(
+               args.report_title,
+               expenses
+             )
+          } else {
+             sheetResult = await googleSheets.createExpenseReportSheet(
+               args.report_title,
+               expenses
+             )
+          }
 
           // Clean up temp files
           try {
-            for (const att of downloadResult.attachmentsDownloaded) {
-              await require('fs/promises')
-                .unlink(att.localPath)
-                .catch(() => {})
-            }
+             await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
           } catch {}
 
           result = {
             success: sheetResult.success,
-            emailsSearched: downloadResult.emailsFound,
-            attachmentsDownloaded: downloadResult.attachmentsDownloaded.length,
-            receiptsProcessed: expenses.length,
+            emailsSearched: searchResult.emailsFound,
+            attachmentsProcessed,
+            bodiesProcessed,
+            totalExpenses: expenses.length,
             totalAmount: sheetResult.totalAmount,
             spreadsheetUrl: sheetResult.spreadsheetUrl,
             error: sheetResult.error
