@@ -165,7 +165,9 @@ RESPOND WITH JSON ONLY (no markdown, no explanation):
     model: MODELS.FLASH,
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 500
+      maxOutputTokens: 500,
+      // @ts-ignore - Gemini 3 performance optimization
+      thinkingLevel: 'minimal'
     }
   })
 
@@ -231,7 +233,9 @@ RESPOND WITH JSON ONLY (no markdown):
     model: MODELS.FLASH,
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 500
+      maxOutputTokens: 500,
+      // @ts-ignore - Gemini 3 performance optimization
+      thinkingLevel: 'minimal'
     }
   })
 
@@ -282,7 +286,9 @@ RESPOND WITH JSON ONLY:
     model: MODELS.FLASH,
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 300
+      maxOutputTokens: 300,
+      // @ts-ignore - Gemini 3 performance optimization
+      thinkingLevel: 'minimal'
     }
   })
 

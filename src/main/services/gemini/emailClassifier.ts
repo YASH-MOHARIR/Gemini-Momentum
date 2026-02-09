@@ -5,8 +5,7 @@ export interface EmailAction {
   type: 'log_to_excel' | 'log_to_sheet' | 'notify' | 'mark_read' | 'archive' | 'star' | 'delete'
   filename?: string // For log_to_excel
   sheetName?: string // For log_to_sheet (Spreadsheet Title)
-  tabName?: string   // For log_to_sheet (Worksheet Name)
-  data?: any // For log_to_excel/sheet (extracted fields)
+  data?: Record<string, unknown> // For log_to_excel/sheet (extracted fields)
   reason?: string
 }
 
@@ -27,7 +26,9 @@ export async function evaluateEmail(
       model: MODELS.FLASH, // Flash is fast and good for this
       generationConfig: {
         temperature: 0.1,
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        // @ts-ignore - Gemini 3 performance optimization
+        thinkingLevel: 'minimal'
       }
     })
 
@@ -103,8 +104,8 @@ JSON FORMAT:
         actions: Array.isArray(json.actions) ? json.actions : [],
         matchedRule: json.matched_rule
       }
-    } catch (e) {
-      console.error('[EMAIL EVALUATOR] Failed to parse JSON:', responseText)
+    } catch (err) {
+      console.error('[EMAIL EVALUATOR] Failed to parse JSON:', responseText, err)
       return { category: 'other', confidence: 0.0, actions: [] }
     }
   } catch (error) {

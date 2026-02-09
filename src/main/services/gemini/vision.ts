@@ -91,7 +91,9 @@ export async function extractReceiptData(
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
       generationConfig: {
-        temperature: 0.1
+        temperature: 0.1,
+        // @ts-ignore - Gemini 3 performance optimization
+        thinkingLevel: 'minimal'
       }
     })
 
@@ -165,7 +167,9 @@ export async function extractReceiptDataFromText(
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
       generationConfig: {
-        temperature: 0.1
+        temperature: 0.1,
+        // @ts-ignore - Gemini 3 performance optimization
+        thinkingLevel: 'minimal'
       }
     })
 
@@ -332,7 +336,11 @@ async function generateImageName(imagePath: string, style?: string): Promise<str
 
   const model = client.getGenerativeModel({
     model: MODELS.FLASH,
-    generationConfig: { temperature: 0.1 }
+    generationConfig: { 
+      temperature: 0.1,
+      // @ts-ignore - Gemini 3 performance optimization
+      thinkingLevel: 'minimal'
+    }
   })
 
   let prompt: string
@@ -367,7 +375,7 @@ Return ONLY the filename, no extension, no explanation.`
   return suggestedName
 }
 
-async function generateDocumentName(filePath: string, _style?: string): Promise<string> {
+async function generateDocumentName(filePath: string): Promise<string> {
   try {
     // Read file content
     const content = await fileSystem.readFile(filePath)
@@ -382,7 +390,11 @@ async function generateDocumentName(filePath: string, _style?: string): Promise<
     const client = getClient()
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
-      generationConfig: { temperature: 0.1 }
+      generationConfig: { 
+      temperature: 0.1,
+      // @ts-ignore - Gemini 3 performance optimization
+      thinkingLevel: 'minimal'
+    }
     })
 
     const contentPreview = content.substring(0, 2000)
@@ -436,7 +448,7 @@ export async function smartRenameFile(
       newBaseName = await generateImageName(filePath, namingStyle)
     } else {
       // For non-images, try to extract from content
-      newBaseName = await generateDocumentName(filePath, namingStyle)
+      newBaseName = await generateDocumentName(filePath)
     }
 
     // Clean the name
@@ -514,7 +526,11 @@ async function categorizeImage(imagePath: string): Promise<ImageCategorization |
 
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
-      generationConfig: { temperature: 0.1 }
+      generationConfig: { 
+      temperature: 0.1,
+      // @ts-ignore - Gemini 3 performance optimization
+      thinkingLevel: 'minimal'
+    }
     })
 
     const prompt = `Categorize this image into ONE of these categories:
@@ -635,7 +651,7 @@ export async function categorizeImages(
       ``
     ]
 
-    const nonEmptyCategories = Object.entries(plan).filter(([_, images]) => images.length > 0)
+    const nonEmptyCategories = Object.entries(plan).filter(([, images]) => images.length > 0)
 
     if (nonEmptyCategories.length > 0) {
       summaryLines.push(`**By Category:**`)

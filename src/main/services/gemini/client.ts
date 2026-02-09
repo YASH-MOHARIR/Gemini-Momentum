@@ -3,8 +3,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 // ============ MODEL CONFIGURATION ============
 
 export const MODELS = {
-  FLASH: 'gemini-3.0-flash-preview',
-  PRO: 'gemini-3.0-pro'
+  FLASH: 'gemini-3-flash-preview',
+  PRO: 'gemini-3-pro-preview'
 } as const
 
 export type ExecutorProfile = 'flash-minimal' | 'flash-high' | 'pro-high'
