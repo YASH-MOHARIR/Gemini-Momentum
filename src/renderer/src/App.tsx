@@ -107,7 +107,7 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
       >
         {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
       </div>
-      <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
+      <div className={`flex-1 max-w-[80%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
         <div
           className={`inline-block px-4 py-2 rounded-lg text-sm ${isUser ? 'bg-accent text-white' : 'bg-slate-800 text-slate-100'} ${message.isError ? 'bg-red-900/50 border border-red-700' : ''}`}
         >
@@ -445,7 +445,7 @@ function App(): ReactElement {
         icon: '/src/renderer/src/assets/icon.png' // consistent with tray icon
       })
       notif.onclick = () => {
-        window.api.agent.openWindow?.() // Hypothetical or just let it focus
+        // window.api.agent.openWindow?.() 
         // If we had a router, we'd navigate to watcherId
       }
     })
@@ -509,15 +509,44 @@ function App(): ReactElement {
     addMessage({ role: 'user', content: userMessage })
     setProcessing(true)
     startTask(userMessage)
+
+    // Check if we need to auto-create a folder
+    let activeFolderPaths = folders.map((f) => f.path)
+
     try {
+      if (activeFolderPaths.length === 0) {
+        const defaultPath = await window.api.fs.getDefaultPath()
+        const exists = await window.api.fs.pathExists(defaultPath)
+
+        if (!exists) {
+          await window.api.fs.createFolder(defaultPath)
+          // Add a system message or notification?
+        }
+
+        // Add to app state
+        const entries = await window.api.fs.listDir(defaultPath)
+        const folderName = defaultPath.split(/[/\\]/).pop() || defaultPath
+        addFolder({
+          path: defaultPath,
+          name: folderName,
+          entries,
+          grantedAt: new Date().toISOString()
+        })
+        
+        activeFolderPaths = [defaultPath]
+        
+        // Notify user in chat stream or separate message?
+        // For now, we just rely on the UI updating to show the folder
+      }
+
       const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map(
         (m) => ({ role: m.role, content: m.content })
       )
-      const grantedFolders = folders.map((f) => f.path)
+      
       const selectedFiles = getSelectedFiles()
       const response = await window.api.agent.chat(
         chatHistory,
-        grantedFolders,
+        activeFolderPaths,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (selectedFiles.length > 0
           ? selectedFiles
@@ -625,7 +654,7 @@ function App(): ReactElement {
             </h2>
             <button
               onClick={handleSelectFolder}
-              className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+              className="p-1.5 rounded-md hover:bg-accent/20 text-slate-400 hover:text-accent-light transition-all active:scale-95"
               title="Add folder"
             >
               <FolderPlus className="w-4 h-4" />
@@ -643,7 +672,7 @@ function App(): ReactElement {
                 <p className="text-sm text-slate-500 mb-3">No folder selected</p>
                 <button
                   onClick={handleSelectFolder}
-                  className="text-sm text-accent hover:text-accent-light"
+                  className="text-sm font-medium text-accent hover:text-accent-light hover:bg-accent/10 px-3 py-1.5 rounded-md transition-all active:scale-95"
                 >
                   + Add a folder
                 </button>
@@ -844,14 +873,14 @@ function App(): ReactElement {
                             : selectedFile
                               ? `Ask about ${selectedFile.name}...`
                               : 'Ask Momentum to organize files, extract data, create reports...'
-                          : 'Select a folder to get started...'
+                          : 'Start chatting... (I will create a "Momentum Results" folder if needed)'
                       }
-                      disabled={!hasAnyFolder || isProcessing}
+                      disabled={isProcessing}
                       className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
                     />
                     <button
                       onClick={() => handleSendMessage()}
-                      disabled={!hasAnyFolder || !inputValue.trim() || isProcessing}
+                      disabled={!inputValue.trim() || isProcessing}
                       className="p-2 m-1.5 bg-accent hover:bg-accent-dark disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-md transition-colors"
                     >
                       <Send className="w-4 h-4" />
