@@ -13,7 +13,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
-  'https://mail.google.com/' 
+  'https://mail.google.com/'
 ]
 
 let oauth2Client: InstanceType<typeof google.auth.OAuth2> | null = null

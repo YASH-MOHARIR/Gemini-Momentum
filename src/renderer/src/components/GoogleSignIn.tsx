@@ -412,7 +412,12 @@ export default function GoogleSignIn(): JSX.Element {
           className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-700 transition-colors"
         >
           {user.picture ? (
-            <img src={user.picture} alt={user.name} className="w-5 h-5 rounded-full" referrerPolicy="no-referrer" />
+            <img
+              src={user.picture}
+              alt={user.name}
+              className="w-5 h-5 rounded-full"
+              referrerPolicy="no-referrer"
+            />
           ) : (
             <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-medium">
               {user.name.charAt(0).toUpperCase()}
