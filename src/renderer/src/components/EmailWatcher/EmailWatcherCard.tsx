@@ -67,7 +67,7 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
     }
   }
   const [isEditing, setIsEditing] = useState(!watcher.isActive)
-// ... (This replace block modifies the EmailWatcherCard component)
+  // ... (This replace block modifies the EmailWatcherCard component)
 
   const [editForm, setEditForm] = useState<{
     name: string
@@ -108,25 +108,25 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
   const handleBrowse = async () => {
     const folder = await window.api.selectFolder()
     if (folder) {
-        setEditForm({ ...editForm, outputFolder: folder })
+      setEditForm({ ...editForm, outputFolder: folder })
     }
   }
 
   const handleSave = async () => {
     // Construct actions object based on autoLabel
     const newActions = { ...watcher.actions }
-    
+
     // For each selected category, ensure 'applyLabel' is added or removed based on toggle
     // Assuming we want this applied to ALL categories for now for simplicity
     const categories = editForm.categories as any[]
-    
-    categories.forEach(cat => {
-        const currentActs = newActions[cat] || ['notify']
-        if (editForm.autoLabel) {
-            if (!currentActs.includes('applyLabel')) newActions[cat] = [...currentActs, 'applyLabel']
-        } else {
-            newActions[cat] = currentActs.filter(a => a !== 'applyLabel')
-        }
+
+    categories.forEach((cat) => {
+      const currentActs = newActions[cat] || ['notify']
+      if (editForm.autoLabel) {
+        if (!currentActs.includes('applyLabel')) newActions[cat] = [...currentActs, 'applyLabel']
+      } else {
+        newActions[cat] = currentActs.filter((a) => a !== 'applyLabel')
+      }
     })
 
     await store.updateWatcher(watcher.id, {
@@ -147,9 +147,7 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
       const exists = prev.categories.includes(cat)
       return {
         ...prev,
-        categories: exists
-          ? prev.categories.filter((c) => c !== cat)
-          : [...prev.categories, cat]
+        categories: exists ? prev.categories.filter((c) => c !== cat) : [...prev.categories, cat]
       }
     })
   }
@@ -250,7 +248,10 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
               className="p-2 hover:bg-gray-700 rounded-lg transition-colors group"
               title="Delete"
             >
-              <Trash2 size={18} className="text-gray-500 group-hover:text-red-400 transition-colors" />
+              <Trash2
+                size={18}
+                className="text-gray-500 group-hover:text-red-400 transition-colors"
+              />
             </button>
 
             <button
@@ -303,10 +304,12 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                 <div className="space-y-6 text-gray-300">
                   {isEditing ? (
                     /* EDIT MODE */
-  /* EDIT MODE */
+                    /* EDIT MODE */
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium text-gray-500 mb-1 block">Watcher Name</label>
+                        <label className="text-sm font-medium text-gray-500 mb-1 block">
+                          Watcher Name
+                        </label>
                         <input
                           type="text"
                           value={editForm.name}
@@ -317,27 +320,28 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
 
                       {/* === Workspace Folder Section === */}
                       <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                          <label className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-2">
-                             Workspace Folder
-                          </label>
-                          <p className="text-xs text-gray-500 mb-3">
-                             This folder serves as the root for any file operations defined in your rules (e.g., saving attachments, logging Excel files).
-                          </p>
-                          <div className="flex gap-2">
-                              <input
-                                  type="text"
-                                  readOnly
-                                  value={editForm.outputFolder || ''}
-                                  placeholder="Select a workspace folder..."
-                                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
-                              />
-                              <button
-                                  onClick={handleBrowse}
-                                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded border border-gray-600"
-                              >
-                                  Browse
-                              </button>
-                          </div>
+                        <label className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-2">
+                          Workspace Folder
+                        </label>
+                        <p className="text-xs text-gray-500 mb-3">
+                          This folder serves as the root for any file operations defined in your
+                          rules (e.g., saving attachments, logging Excel files).
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={editForm.outputFolder || ''}
+                            placeholder="Select a workspace folder..."
+                            className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                          />
+                          <button
+                            onClick={handleBrowse}
+                            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded border border-gray-600"
+                          >
+                            Browse
+                          </button>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -345,7 +349,9 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                           <input
                             type="checkbox"
                             checked={editForm.autoLabel}
-                            onChange={(e) => setEditForm({ ...editForm, autoLabel: e.target.checked })}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, autoLabel: e.target.checked })
+                            }
                             className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
                           />
                           <span className="text-sm font-medium text-gray-300">
@@ -353,32 +359,48 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                           </span>
                         </label>
                       </div>
-                      
+
                       {editForm.autoLabel && (
                         <div className="pl-6">
-                            <label className="text-xs font-medium text-gray-500 mb-1 block">Custom Label Name (Optional)</label>
-                            <input
-                              type="text"
-                              placeholder={`Default: ${editForm.categories[0] ? (editForm.categories[0].charAt(0).toUpperCase() + editForm.categories[0].slice(1)) : 'Category Name'}`}
-                              value={editForm.customLabelNames[editForm.categories[0] || 'default'] || ''}
-                              onChange={(e) => {
-                                  const cat = editForm.categories[0] || 'default';
-                                  setEditForm({
-                                      ...editForm,
-                                      customLabelNames: { ...editForm.customLabelNames, [cat]: e.target.value }
-                                  })
-                              }}
-                              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">If left blank, the category name will be used.</p>
+                          <label className="text-xs font-medium text-gray-500 mb-1 block">
+                            Custom Label Name (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={`Default: ${editForm.categories[0] ? editForm.categories[0].charAt(0).toUpperCase() + editForm.categories[0].slice(1) : 'Category Name'}`}
+                            value={
+                              editForm.customLabelNames[editForm.categories[0] || 'default'] || ''
+                            }
+                            onChange={(e) => {
+                              const cat = editForm.categories[0] || 'default'
+                              setEditForm({
+                                ...editForm,
+                                customLabelNames: {
+                                  ...editForm.customLabelNames,
+                                  [cat]: e.target.value
+                                }
+                              })
+                            }}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            If left blank, the category name will be used.
+                          </p>
                         </div>
                       )}
 
                       <div>
-                        <label className="text-sm font-medium text-gray-500 mb-1 block">Check Interval (minutes)</label>
+                        <label className="text-sm font-medium text-gray-500 mb-1 block">
+                          Check Interval (minutes)
+                        </label>
                         <select
                           value={editForm.checkIntervalMinutes}
-                          onChange={(e) => setEditForm({ ...editForm, checkIntervalMinutes: Number(e.target.value) })}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              checkIntervalMinutes: Number(e.target.value)
+                            })
+                          }
                           className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
                         >
                           <option value={5}>5 minutes</option>
@@ -392,7 +414,9 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                       </div>
 
                       <div>
-                        <label className="text-sm font-medium text-gray-500 mb-1 block">Active Categories</label>
+                        <label className="text-sm font-medium text-gray-500 mb-1 block">
+                          Active Categories
+                        </label>
                         <div className="flex flex-wrap gap-2">
                           {['job', 'receipt', 'important', 'spam', 'other'].map((cat) => (
                             <button
@@ -411,7 +435,9 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                       </div>
 
                       <div>
-                        <label className="text-sm font-medium text-gray-500 mb-1 block">Natural Language Rules</label>
+                        <label className="text-sm font-medium text-gray-500 mb-1 block">
+                          Natural Language Rules
+                        </label>
                         <div className="space-y-2">
                           {editForm.rules.map((rule, i) => (
                             <div key={i} className="flex gap-2">
@@ -437,9 +463,10 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                             + Add Rule
                           </button>
                           <p className="text-xs text-gray-500 mt-1">
-                            Define specific actions. Examples:<br/>
-                            - "Log all grocery receipts to 'groceries.xlsx'"<br/>
-                            - "Save invoices from 'Apple' to 'tech_expenses.xlsx'"
+                            Define specific actions. Examples:
+                            <br />
+                            - "Log all grocery receipts to 'groceries.xlsx'"
+                            <br />- "Save invoices from 'Apple' to 'tech_expenses.xlsx'"
                           </p>
                         </div>
                       </div>
@@ -466,12 +493,14 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                         <h4 className="text-sm font-medium text-gray-500 mb-1">Watcher Name</h4>
                         <p>{watcher.name}</p>
                       </div>
-                      
+
                       {watcher.outputFolder && (
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-500 mb-1">Workspace Folder</h4>
-                            <p className="text-sm text-gray-300 break-all">{watcher.outputFolder}</p>
-                          </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-500 mb-1">
+                            Workspace Folder
+                          </h4>
+                          <p className="text-sm text-gray-300 break-all">{watcher.outputFolder}</p>
+                        </div>
                       )}
 
                       <div>
@@ -479,10 +508,14 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                         <p>{watcher.checkInterval / 60000} minutes</p>
                       </div>
                       <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-1">Natural Language Rules</h4>
+                        <h4 className="text-sm font-medium text-gray-500 mb-1">
+                          Natural Language Rules
+                        </h4>
                         <ul className="list-disc list-inside space-y-1">
                           {(watcher.rules || []).map((rule, i) => (
-                            <li key={i} className="text-sm">{rule}</li>
+                            <li key={i} className="text-sm">
+                              {rule}
+                            </li>
                           ))}
                           {(!watcher.rules || watcher.rules.length === 0) && (
                             <li className="text-sm text-gray-500 italic">No rules defined</li>
@@ -490,15 +523,22 @@ const EmailWatcherCard: React.FC<EmailWatcherCardProps> = ({ watcher }) => {
                         </ul>
                       </div>
                       <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-1">Active Categories</h4>
+                        <h4 className="text-sm font-medium text-gray-500 mb-1">
+                          Active Categories
+                        </h4>
                         <div className="flex flex-wrap gap-2">
                           {(watcher.categories || []).map((cat) => (
-                            <span key={cat} className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300">
+                            <span
+                              key={cat}
+                              className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300"
+                            >
                               {cat}
                             </span>
                           ))}
                           {(!watcher.categories || watcher.categories.length === 0) && (
-                            <span className="text-xs text-gray-500 italic">No categories selected</span>
+                            <span className="text-xs text-gray-500 italic">
+                              No categories selected
+                            </span>
                           )}
                         </div>
                       </div>

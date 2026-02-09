@@ -212,7 +212,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     if (!result.success) {
       console.error('Failed to delete message:', result.error)
       // Optionally show toast or revert optimistic update if we did it first
-      // throw new Error(result.error) 
+      // throw new Error(result.error)
       return
     }
 
@@ -221,7 +221,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       matches: {
         ...state.matches,
         [watcherId]: (state.matches[watcherId] || []).filter((m) => m.id !== messageId)
-      },
+      }
       // Optional: Remove from activity log too if desired, though logs usually persist
       // activity: {
       //   ...state.activity,

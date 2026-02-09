@@ -9,7 +9,6 @@ import { getAuthClient, isSignedIn } from './googleAuth'
 import { evaluateEmail } from './gemini/emailClassifier'
 import * as gmailService from './gmail'
 
-
 // ... (Preserve interfaces)
 export interface EmailWatcherConfig {
   id: string
@@ -181,10 +180,10 @@ export function startEmailWatcher(
       isPaused: !config.isActive,
       isChecking: false
     }
-    
+
     // Initialize processedIds if missing from config
     if (!instance.config.processedIds) {
-        instance.config.processedIds = []
+      instance.config.processedIds = []
     }
 
     watchers.set(config.id, instance)
@@ -315,12 +314,16 @@ export function manualCheckEmails(watcherId: string): { success: boolean; error?
 
 // ============ Internal Logic ============
 
-async function logToExcel(folder: string, filename: string, data: Record<string, unknown>): Promise<void> {
+async function logToExcel(
+  folder: string,
+  filename: string,
+  data: Record<string, unknown>
+): Promise<void> {
   try {
     const filePath = path.join(folder, filename)
     let workbook: XLSX.WorkBook
     let worksheet: XLSX.WorkSheet
-    
+
     // Create folder if it doesn't exist
     if (!fs.existsSync(folder)) {
       fs.mkdirSync(folder, { recursive: true })
@@ -340,10 +343,10 @@ async function logToExcel(folder: string, filename: string, data: Record<string,
     // Convert worksheet to JSON to append new data
     const existingData = XLSX.utils.sheet_to_json(worksheet)
     existingData.push(data)
-    
+
     const newWorksheet = XLSX.utils.json_to_sheet(existingData)
     workbook.Sheets[workbook.SheetNames[0]] = newWorksheet
-    
+
     XLSX.writeFile(workbook, filePath)
     console.log(`[EXCEL] Logged data to ${filePath}`)
   } catch (error) {
@@ -426,7 +429,7 @@ async function logToSheet(
 
     // 3. Append Data
     const values = Object.values(data)
-    
+
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: `${tabName}!A1`,
@@ -437,7 +440,6 @@ async function logToSheet(
     })
 
     console.log(`[SHEETS] Logged to ${sheetName}`)
-
   } catch (error) {
     console.error('[SHEETS] Error logging data:', error)
   }
@@ -484,11 +486,11 @@ async function checkEmails(watcherId: string): Promise<void> {
 
     for (const msg of messages) {
       if (!msg.id) continue
-      
+
       // Skip if already processed
       if (instance.config.processedIds && instance.config.processedIds.includes(msg.id)) {
-          // console.log(`[EMAIL WATCHER ${watcherId}] Skipping duplicate message ${msg.id}`)
-          continue
+        // console.log(`[EMAIL WATCHER ${watcherId}] Skipping duplicate message ${msg.id}`)
+        continue
       }
 
       try {
@@ -534,7 +536,9 @@ async function checkEmails(watcherId: string): Promise<void> {
               if (instance.config.outputFolder && action.filename && action.data) {
                 await logToExcel(instance.config.outputFolder, action.filename, action.data)
               } else {
-                console.warn(`[EMAIL WATCHER] Skipping log_to_excel: Missing outputFolder or action data.`)
+                console.warn(
+                  `[EMAIL WATCHER] Skipping log_to_excel: Missing outputFolder or action data.`
+                )
               }
             } else if (action.type === 'log_to_sheet') {
               if (action.sheetName && action.data) {
@@ -559,7 +563,7 @@ async function checkEmails(watcherId: string): Promise<void> {
             subject: details.subject,
             from: details.from,
             category: category,
-            action: [...configActions, ...actions.map(a => a.type)].join(', '),
+            action: [...configActions, ...actions.map((a) => a.type)].join(', '),
             confidence: confidence,
             matchedRule: matchedRule
           }
@@ -574,14 +578,13 @@ async function checkEmails(watcherId: string): Promise<void> {
         }
 
         instance.stats.emailsChecked++
-        
+
         // Mark as processed
         if (!instance.config.processedIds) instance.config.processedIds = []
         instance.config.processedIds.push(msg.id)
         if (instance.config.processedIds.length > MAX_PROCESSED_IDS) {
-            instance.config.processedIds.shift()
+          instance.config.processedIds.shift()
         }
-
       } catch (err) {
         console.error(`[EMAIL WATCHER ${watcherId}] Error processing msg ${msg.id}:`, err)
         instance.stats.errors++
@@ -637,8 +640,10 @@ async function executeActions(
         const instance = watchers.get(watcherId)
         let categoryLabel =
           emailMatch.category.charAt(0).toUpperCase() + emailMatch.category.slice(1)
-        
-        console.log(`[EMAIL WATCHER] Applying label for category: ${emailMatch.category}, Default: ${categoryLabel}`)
+
+        console.log(
+          `[EMAIL WATCHER] Applying label for category: ${emailMatch.category}, Default: ${categoryLabel}`
+        )
 
         // Use custom label if configured
         if (instance?.config.customLabels && instance.config.customLabels[emailMatch.category]) {
@@ -674,7 +679,7 @@ async function executeActions(
               console.log(`[EMAIL WATCHER] Created new label ID: ${newLabel.data.id}`)
               labelsToAdd.push(newLabel.data.id)
             } else {
-                console.error(`[EMAIL WATCHER] Failed to create label. No ID returned.`)
+              console.error(`[EMAIL WATCHER] Failed to create label. No ID returned.`)
             }
           }
         } catch (error) {
@@ -717,7 +722,7 @@ export async function deleteMessage(
 
   // 1. Remove from local matches
   instance.matches = instance.matches.filter((m) => m.id !== messageId)
-  
+
   // Persist the removal to store immediately
   saveWatcherToStore(watcherId)
 
@@ -737,14 +742,14 @@ export async function deleteMessage(
     console.log(`[EMAIL WATCHER] Syncing deletion based on rule: "${rules}"`)
     await deleteFromExcel(instance.config.outputFolder, messageId)
   }
-  
+
   // 3. Delete from Gmail if requested
   if (fromGmail) {
     try {
       const auth = getAuthClient()
       if (!auth) throw new Error('Google Auth required')
       const gmail = google.gmail({ version: 'v1', auth })
-      
+
       await gmail.users.messages.trash({
         userId: 'me',
         id: messageId

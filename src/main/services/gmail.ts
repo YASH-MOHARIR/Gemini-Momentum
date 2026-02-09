@@ -378,7 +378,7 @@ export async function searchAndProcessEmails(
           const textPart = detail.data.payload.parts.find((p) => p.mimeType === 'text/plain')
           const htmlPart = detail.data.payload.parts.find((p) => p.mimeType === 'text/html')
           const partToUse = textPart || htmlPart
-          
+
           if (partToUse && partToUse.body?.data) {
             body = Buffer.from(partToUse.body.data, 'base64').toString('utf-8')
           }
@@ -387,7 +387,7 @@ export async function searchAndProcessEmails(
         // Process Attachments
         const attachments: AttachmentInfo[] = []
         const parts = detail.data.payload?.parts || []
-        
+
         // Helper to find attachments recursively
         const findAttachments = (parts: any[]) => {
           const found: any[] = []
@@ -401,7 +401,7 @@ export async function searchAndProcessEmails(
           }
           return found
         }
-        
+
         const attachmentParts = findAttachments(parts)
 
         for (const part of attachmentParts) {
@@ -437,7 +437,7 @@ export async function searchAndProcessEmails(
               size: buffer.length,
               localPath
             })
-            
+
             console.log(`[GMAIL] Downloaded: ${uniqueName}`)
           } catch (err) {
             console.error(`[GMAIL] Error downloading ${filename}:`, err)
@@ -453,7 +453,6 @@ export async function searchAndProcessEmails(
           body,
           attachments
         })
-
       } catch (err) {
         console.error(`[GMAIL] Error processing message ${msg.id}:`, err)
       }

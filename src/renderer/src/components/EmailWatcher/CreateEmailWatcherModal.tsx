@@ -106,9 +106,20 @@ const CreateEmailWatcherModal: React.FC<CreateEmailWatcherModalProps> = ({ onClo
 
           {/* Categories */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Categories to Watch</label>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Categories to Watch
+            </label>
             <div className="flex flex-wrap gap-2">
-              {['important', 'work', 'personal', 'updates', 'promotions', 'social', 'finance', 'job'].map((cat) => (
+              {[
+                'important',
+                'work',
+                'personal',
+                'updates',
+                'promotions',
+                'social',
+                'finance',
+                'job'
+              ].map((cat) => (
                 <button
                   key={cat}
                   onClick={() => toggleCategory(cat)}
