@@ -91,9 +91,7 @@ export async function extractReceiptData(
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
       generationConfig: {
-        temperature: 0.1,
-        // @ts-ignore - Gemini 3 performance optimization
-        thinkingLevel: 'minimal'
+        temperature: 0.1
       }
     })
 
@@ -167,9 +165,7 @@ export async function extractReceiptDataFromText(
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
       generationConfig: {
-        temperature: 0.1,
-        // @ts-ignore - Gemini 3 performance optimization
-        thinkingLevel: 'minimal'
+        temperature: 0.1
       }
     })
 
@@ -336,10 +332,8 @@ async function generateImageName(imagePath: string, style?: string): Promise<str
 
   const model = client.getGenerativeModel({
     model: MODELS.FLASH,
-    generationConfig: { 
-      temperature: 0.1,
-      // @ts-ignore - Gemini 3 performance optimization
-      thinkingLevel: 'minimal'
+    generationConfig: {
+      temperature: 0.1
     }
   })
 
@@ -390,11 +384,9 @@ async function generateDocumentName(filePath: string): Promise<string> {
     const client = getClient()
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
-      generationConfig: { 
-      temperature: 0.1,
-      // @ts-ignore - Gemini 3 performance optimization
-      thinkingLevel: 'minimal'
-    }
+      generationConfig: {
+        temperature: 0.1
+      }
     })
 
     const contentPreview = content.substring(0, 2000)
@@ -526,11 +518,9 @@ async function categorizeImage(imagePath: string): Promise<ImageCategorization |
 
     const model = client.getGenerativeModel({
       model: MODELS.FLASH,
-      generationConfig: { 
-      temperature: 0.1,
-      // @ts-ignore - Gemini 3 performance optimization
-      thinkingLevel: 'minimal'
-    }
+      generationConfig: {
+        temperature: 0.1
+      }
     })
 
     const prompt = `Categorize this image into ONE of these categories:

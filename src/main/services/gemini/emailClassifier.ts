@@ -26,9 +26,7 @@ export async function evaluateEmail(
       model: MODELS.FLASH, // Flash is fast and good for this
       generationConfig: {
         temperature: 0.1,
-        responseMimeType: 'application/json',
-        // @ts-ignore - Gemini 3 performance optimization
-        thinkingLevel: 'minimal'
+        responseMimeType: 'application/json'
       }
     })
 

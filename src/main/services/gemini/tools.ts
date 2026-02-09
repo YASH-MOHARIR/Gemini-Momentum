@@ -435,7 +435,8 @@ Requires: User must be signed into Google.`,
       properties: {
         gmail_query: {
           type: 'STRING',
-          description: 'Gmail search query. Use broad keywords if user is vague (e.g., "(receipt OR invoice OR order OR bill) after:2024/01/01"). Only use specific terms if user asks.'
+          description:
+            'Gmail search query. Use broad keywords if user is vague (e.g., "(receipt OR invoice OR order OR bill) after:2024/01/01"). Only use specific terms if user asks.'
         },
         report_title: { type: 'STRING', description: 'Title for the expense report' },
         category_hint: {
@@ -444,7 +445,8 @@ Requires: User must be signed into Google.`,
         },
         itemized: {
           type: 'BOOLEAN',
-          description: 'If true, creates a report with individual line items (name, qty, price) instead of just receipt totals. Use when user asks for "item details", "line items", "what I bought", etc.'
+          description:
+            'If true, creates a report with individual line items (name, qty, price) instead of just receipt totals. Use when user asks for "item details", "line items", "what I bought", etc.'
         }
       },
       required: ['gmail_query', 'report_title']

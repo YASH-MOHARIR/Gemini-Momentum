@@ -304,11 +304,7 @@ export async function executeTool(
           console.log('[GMAIL→SHEETS] Step 1: Searching emails with query:', args.gmail_query)
 
           // Use the new function that gets bodies too
-          const searchResult = await gmail.searchAndProcessEmails(
-            args.gmail_query,
-            tempDir,
-            30
-          )
+          const searchResult = await gmail.searchAndProcessEmails(args.gmail_query, tempDir, 30)
 
           if (!searchResult.success || searchResult.processedEmails.length === 0) {
             result = {
@@ -318,9 +314,7 @@ export async function executeTool(
             break
           }
 
-          console.log(
-            `[GMAIL→SHEETS] Processing ${searchResult.processedEmails.length} emails...`
-          )
+          console.log(`[GMAIL→SHEETS] Processing ${searchResult.processedEmails.length} emails...`)
 
           // Step 2: Process each email (attachments OR body)
           console.log('[GMAIL→SHEETS] Step 2: Analyze content with Vision/LLM...')
@@ -358,7 +352,10 @@ export async function executeTool(
                       attachmentsProcessed++
                     }
                   } catch (err) {
-                    console.error(`[GMAIL→SHEETS] Failed to process attachment ${att.filename}:`, err)
+                    console.error(
+                      `[GMAIL→SHEETS] Failed to process attachment ${att.filename}:`,
+                      err
+                    )
                   }
                   await new Promise((r) => setTimeout(r, 500))
                 }
@@ -367,28 +364,28 @@ export async function executeTool(
 
             // 2b. If no expense found, try body
             if (!emailHasExpense && email.body && email.body.length > 50) {
-               try {
-                 console.log(`[GMAIL→SHEETS] Analyzing body of email: ${email.subject}`)
-                 const textData = await extractReceiptDataFromText(
-                   `Subject: ${email.subject}\nFrom: ${email.from}\nDate: ${email.date}\n\n${email.body}`,
-                   args.category_hint
-                 )
-                 
-                 if (textData) {
-                    expenses.push({
-                      vendor: textData.vendor,
-                      date: textData.date,
-                      category: textData.category,
-                      description: textData.description,
-                      amount: textData.amount,
-                      items: textData.items
-                    })
-                    bodiesProcessed++
-                 }
-               } catch (err) {
-                 console.error(`[GMAIL→SHEETS] Failed to process email body for ${email.id}:`, err)
-               }
-               await new Promise((r) => setTimeout(r, 500))
+              try {
+                console.log(`[GMAIL→SHEETS] Analyzing body of email: ${email.subject}`)
+                const textData = await extractReceiptDataFromText(
+                  `Subject: ${email.subject}\nFrom: ${email.from}\nDate: ${email.date}\n\n${email.body}`,
+                  args.category_hint
+                )
+
+                if (textData) {
+                  expenses.push({
+                    vendor: textData.vendor,
+                    date: textData.date,
+                    category: textData.category,
+                    description: textData.description,
+                    amount: textData.amount,
+                    items: textData.items
+                  })
+                  bodiesProcessed++
+                }
+              } catch (err) {
+                console.error(`[GMAIL→SHEETS] Failed to process email body for ${email.id}:`, err)
+              }
+              await new Promise((r) => setTimeout(r, 500))
             }
           }
 
@@ -400,27 +397,22 @@ export async function executeTool(
             break
           }
 
-          console.log(
-            `[GMAIL→SHEETS] Step 3: Creating Sheet with ${expenses.length} expenses...`
-          )
+          console.log(`[GMAIL→SHEETS] Step 3: Creating Sheet with ${expenses.length} expenses...`)
 
           // Step 3: Create Google Sheet (Itemized or Standard)
           let sheetResult
           if (args.itemized) {
-             sheetResult = await googleSheets.createItemizedExpenseReportSheet(
-               args.report_title,
-               expenses
-             )
+            sheetResult = await googleSheets.createItemizedExpenseReportSheet(
+              args.report_title,
+              expenses
+            )
           } else {
-             sheetResult = await googleSheets.createExpenseReportSheet(
-               args.report_title,
-               expenses
-             )
+            sheetResult = await googleSheets.createExpenseReportSheet(args.report_title, expenses)
           }
 
           // Clean up temp files
           try {
-             await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+            await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
           } catch {}
 
           result = {

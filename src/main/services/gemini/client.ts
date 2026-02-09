@@ -35,8 +35,8 @@ export const EXECUTOR_CONFIGS: Record<ExecutorProfile, ExecutorConfig> = {
 
 // Pricing per 1M tokens
 export const PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-flash': { input: 0.5, output: 3.0 },
-  'gemini-2.5-pro': { input: 2.0, output: 12.0 }
+  'gemini-3-flash-preview': { input: 0.1, output: 0.4 },
+  'gemini-3-pro-preview': { input: 1.25, output: 5.0 }
 }
 
 // ============ CLIENT ============

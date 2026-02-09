@@ -58,8 +58,6 @@ EXAMPLES:
 "Extract data from this receipt" → image_analysis, requiresVision=true, steps=2, complexity=0.5
 "Summarize all PDFs and create report" → complex_reasoning, steps=8, complexity=0.8`
 
-
-
 function selectExecutor(classification: TaskClassification): ExecutorProfile {
   const { taskType, complexityScore, requiresVision, estimatedSteps, requiresMultipleTools } =
     classification
@@ -103,7 +101,14 @@ export async function classifyTask(
     }
   }
 
-  const today = new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const today = new Date().toLocaleString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
   const prompt = `Classify this task (TODAY is ${today}):${contextInfo}\n\nUser request: "${userMessage}"`
 
   console.log('[ROUTER] Classifying task...')
