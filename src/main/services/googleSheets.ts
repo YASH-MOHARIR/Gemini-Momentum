@@ -159,8 +159,9 @@ export async function createExpenseReportSheet(
     })
 
     const spreadsheetId = createResponse.data.spreadsheetId!
-    const expensesSheetId = createResponse.data.sheets?.[0]?.properties?.sheetId || 0
-    const summarySheetId = createResponse.data.sheets?.[1]?.properties?.sheetId || 1
+    const sheetsArr = createResponse.data.sheets || []
+    const expensesSheetId = sheetsArr[0]?.properties?.sheetId ?? 0
+    const summarySheetId = sheetsArr[1]?.properties?.sheetId ?? 1
 
     // Expenses sheet data
     const expenseHeaders = ['Date', 'Vendor', 'Category', 'Description', 'Amount']
@@ -301,6 +302,174 @@ export async function createExpenseReportSheet(
     return { success: true, spreadsheetId, spreadsheetUrl, totalAmount }
   } catch (err) {
     console.error('[SHEETS] Error creating expense report:', err)
+    return { success: false, error: String(err) }
+  }
+}
+
+export interface ItemizedExpense extends Expense {
+  items?: Array<{
+    description: string
+    qty: number
+    price: number
+  }>
+}
+
+export async function createItemizedExpenseReportSheet(
+  title: string,
+  expenses: ItemizedExpense[]
+): Promise<ExpenseReportResult> {
+  const auth = getAuthClient()
+  if (!auth || !(await isSignedIn())) {
+    return { success: false, error: 'Not signed into Google' }
+  }
+
+  const sheets = google.sheets({ version: 'v4', auth })
+
+  try {
+    // Sort by date
+    const sorted = [...expenses].sort((a, b) => a.date.localeCompare(b.date))
+
+    // Create spreadsheet
+    const createResponse = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: { title },
+        sheets: [
+          { properties: { title: 'Itemized Details', index: 0 } },
+          { properties: { title: 'Summary', index: 1 } }
+        ]
+      }
+    })
+
+    const spreadsheetId = createResponse.data.spreadsheetId!
+    const sheetsArr = createResponse.data.sheets || []
+    const detailsSheetId = sheetsArr[0]?.properties?.sheetId ?? 0
+
+    // 1. Details Sheet (Flattened items)
+    const detailHeaders = ['Date', 'Vendor', 'Category', 'Item Description', 'Qty', 'Unit Price', 'Total']
+    const detailRows: (string | number)[][] = []
+    
+    let calculatedTotal = 0
+
+    const categoryTotals: Record<string, number> = {}
+
+    sorted.forEach(exp => {
+      // Logic for category totals
+      let expTotal = 0
+      
+      if (exp.items && exp.items.length > 0) {
+        exp.items.forEach(item => {
+          const itemTotal = item.qty * item.price
+          calculatedTotal += itemTotal
+          expTotal += itemTotal
+          detailRows.push([
+            exp.date,
+            exp.vendor,
+            exp.category,
+            item.description,
+            item.qty,
+            item.price,
+            itemTotal
+          ])
+        })
+      } else {
+        // Fallback
+        calculatedTotal += exp.amount
+        expTotal = exp.amount
+        detailRows.push([
+          exp.date,
+          exp.vendor,
+          exp.category,
+          exp.description,
+          1,
+          exp.amount,
+          exp.amount
+        ])
+      }
+      
+      categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + expTotal
+    })
+
+    // Add total row
+    detailRows.push(['', '', '', '', '', 'GRAND TOTAL', calculatedTotal])
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'Itemized Details!A1',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [detailHeaders, ...detailRows] }
+    })
+
+    // 2. Summary Sheet
+    const summaryHeaders = ['Category', 'Total']
+    const summaryRows = Object.entries(categoryTotals)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, total]) => [cat, total])
+    
+    summaryRows.push(['GRAND TOTAL', calculatedTotal])
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'Summary!A1',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [summaryHeaders, ...summaryRows] }
+    })
+
+    // Format Sheets
+    const requests: sheets_v4.Schema$Request[] = [
+      // Format Details Header
+      {
+        repeatCell: {
+          range: { sheetId: detailsSheetId, startRowIndex: 0, endRowIndex: 1 },
+          cell: {
+            userEnteredFormat: {
+              textFormat: { bold: true },
+              backgroundColor: { red: 0.2, green: 0.3, blue: 0.4 },
+              horizontalAlignment: 'CENTER'
+            }
+          },
+          fields: 'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)'
+        }
+      },
+      // Freeze Details Header
+      {
+        updateSheetProperties: {
+          properties: { sheetId: detailsSheetId, gridProperties: { frozenRowCount: 1 } },
+          fields: 'gridProperties.frozenRowCount'
+        }
+      },
+      // Currency Format for Price/Total columns (F, G)
+      {
+        repeatCell: {
+          range: { 
+            sheetId: detailsSheetId, 
+            startRowIndex: 1, 
+            startColumnIndex: 5, 
+            endColumnIndex: 7 
+          },
+          cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$#,##0.00' } } },
+          fields: 'userEnteredFormat.numberFormat'
+        }
+      },
+      // Resize Columns
+       {
+        autoResizeDimensions: {
+          dimensions: { sheetId: detailsSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 7 }
+        }
+      }
+    ]
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests }
+    })
+
+    const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`
+    console.log(`[SHEETS] Itemized report created: ${spreadsheetUrl}`)
+
+    return { success: true, spreadsheetId, spreadsheetUrl, totalAmount: calculatedTotal }
+
+  } catch (err) {
+    console.error('[SHEETS] Error creating itemized report:', err)
     return { success: false, error: String(err) }
   }
 }

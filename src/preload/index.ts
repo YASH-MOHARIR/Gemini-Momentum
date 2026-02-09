@@ -227,6 +227,7 @@ export interface ElectronAPI {
     getDirSize: (path: string) => Promise<number>
     writeFile: (path: string, content: string) => Promise<OperationResult>
     createFolder: (path: string) => Promise<OperationResult>
+    getDefaultPath: () => Promise<string>
     deleteFile: (path: string) => Promise<OperationResult>
     permanentDelete: (path: string) => Promise<OperationResult>
     moveFile: (from: string, to: string) => Promise<OperationResult>
@@ -378,6 +379,7 @@ const api: ElectronAPI = {
       ipcRenderer.invoke('fs:write-file', path, content),
     createFolder: (path: string): Promise<OperationResult> =>
       ipcRenderer.invoke('fs:create-folder', path),
+    getDefaultPath: (): Promise<string> => ipcRenderer.invoke('fs:get-default-path'),
     deleteFile: (path: string): Promise<OperationResult> =>
       ipcRenderer.invoke('fs:delete-file', path),
     permanentDelete: (path: string): Promise<OperationResult> =>
@@ -428,7 +430,7 @@ const api: ElectronAPI = {
       return () => ipcRenderer.removeListener('agent:stream-chunk', handler)
     },
     onStreamEnd: (callback: (chunk: string) => void) => {
-      const handler = () => callback(chunk) // Corrected argument match
+      const handler = (_: unknown, chunk: string) => callback(chunk)
       ipcRenderer.on('agent:stream-end', handler)
       return () => ipcRenderer.removeListener('agent:stream-end', handler)
     },

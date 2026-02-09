@@ -52,7 +52,7 @@ type FolderSelectMode = 'none' | 'watch' | 'destination'
 export interface AgentState {
   // Mode
   mode: 'chat' | 'agent'
-  status: 'idle' | 'running' | 'paused'
+  status: 'idle' | 'running' | 'paused' | 'configuring'
 
   // Multiple watchers
   watchers: Map<string, WatcherState>
@@ -70,7 +70,7 @@ export interface AgentState {
 
   // Actions - Mode
   setMode: (mode: 'chat' | 'agent') => void
-  setStatus: (status: 'idle' | 'running' | 'paused') => void
+  setStatus: (status: 'idle' | 'running' | 'paused' | 'configuring') => void
 
   // Actions - Watchers
   createWatcher: (config: AgentConfig) => void

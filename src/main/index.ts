@@ -280,6 +280,10 @@ ipcMain.handle('fs:get-dir-size', async (_, dirPath: string) => {
 })
 
 // File system - Write operations
+ipcMain.handle('fs:get-default-path', () => {
+  return join(process.cwd(), 'Momentum Results')
+})
+
 ipcMain.handle('fs:write-file', async (_, filePath: string, content: string) => {
   return await fileSystem.writeFile(filePath, content)
 })
@@ -512,10 +516,9 @@ ipcMain.handle('email:start-watcher', (_, config: emailWatcher.EmailWatcherConfi
 ipcMain.handle(
   'email:update-watcher',
   (_, watcherId: string, updates: Partial<emailWatcher.EmailWatcherConfig>) => {
-    return emailWatcher.startEmailWatcher(
-      { ...emailWatcher.getWatcher(watcherId)!.config, ...updates },
-      mainWindow!
-    )
+    const currentConfig = emailWatcher.getWatcherConfig(watcherId)
+    if (!currentConfig) return { success: false, error: 'Watcher not found' }
+    return emailWatcher.startEmailWatcher({ ...currentConfig, ...updates }, mainWindow!)
   }
 )
 

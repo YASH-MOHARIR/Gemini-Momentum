@@ -37,21 +37,13 @@ declare global {
     result: unknown
   }
 
-  interface AgentResponse {
-    message: string
-    toolCalls?: ToolCall[]
-    error?: string
-    classification?: TaskClassification
-    executorUsed?: string
-  }
-
   interface TaskClassification {
     taskType: string
     requiresVision: boolean
     requiresMultipleTools: boolean
     estimatedSteps: number
     complexityScore: number
-    recommendedExecutor: string
+    recommendedExecutor: 'flash-minimal' | 'flash-high' | 'pro-high'
     reasoning: string
   }
 
@@ -67,15 +59,29 @@ declare global {
     estimatedSavings: number
   }
 
+  interface AgentResponse {
+    message: string
+    toolCalls?: ToolCall[]
+    error?: string
+    classification?: TaskClassification
+    executorUsed?: 'flash-minimal' | 'flash-high' | 'pro-high'
+  }
+
   interface PendingAction {
     id: string
-    type: 'delete'
-    path: string
+    type: 'delete' | 'move' | 'rename' | 'overwrite'
+    sourcePath: string
+    destinationPath?: string
     fileName: string
     fileSize: number
-    isDirectory: boolean
-    reason: string
-    queuedAt: string
+    reason?: string
+    createdAt: string
+  }
+
+  interface ActionResult {
+    id: string
+    success: boolean
+    error?: string
   }
 
   interface GoogleUser {
@@ -143,6 +149,8 @@ declare global {
     }
     customLabels?: Record<string, string>
     processedIds?: string[]
+    outputFolder?: string
+    exportData?: boolean
     lastChecked: string | null
     isActive: boolean
     createdAt: string
@@ -210,16 +218,17 @@ declare global {
     expandDir: (path: string) => Promise<FileEntry[]>
     readFile: (path: string) => Promise<string>
     readFileBuffer: (path: string) => Promise<string>
+    getFileInfo: (path: string) => Promise<FileInfo>
+    pathExists: (path: string) => Promise<boolean>
+    getDirSize: (path: string) => Promise<number>
     writeFile: (path: string, content: string) => Promise<OperationResult>
     createFolder: (path: string) => Promise<OperationResult>
+    getDefaultPath: () => Promise<string>
     deleteFile: (path: string) => Promise<OperationResult>
     permanentDelete: (path: string) => Promise<OperationResult>
     moveFile: (from: string, to: string) => Promise<OperationResult>
     renameFile: (path: string, newName: string) => Promise<OperationResult>
     copyFile: (from: string, to: string) => Promise<OperationResult>
-    getFileInfo: (path: string) => Promise<FileInfo>
-    pathExists: (path: string) => Promise<boolean>
-    getDirSize: (path: string) => Promise<number>
     getTrash: () => Promise<TrashEntry[]>
     restoreFromTrash: (trashPath: string) => Promise<OperationResult>
     emptyTrash: () => Promise<OperationResult>
@@ -229,17 +238,17 @@ declare global {
   interface AgentAPI {
     init: (apiKey: string) => Promise<{ success: boolean; error?: string }>
     isReady: () => Promise<boolean>
-    test: () => Promise<{ success: boolean; error?: string }>
     chat: (
-      messages: Array<{ role: string; content: string }>,
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>,
       grantedFolders: string[],
       selectedFile?: string,
       isDirectory?: boolean
     ) => Promise<AgentResponse>
+    test: () => Promise<{ success: boolean; error?: string }>
     getMetrics: () => Promise<SessionMetrics>
     resetMetrics: () => Promise<void>
     onStreamChunk: (callback: (chunk: string) => void) => () => void
-    onStreamEnd: (callback: () => void) => () => void
+    onStreamEnd: (callback: (chunk: string) => void) => () => void
     onToolCall: (
       callback: (data: { name: string; args: Record<string, string> }) => void
     ) => () => void
@@ -284,19 +293,21 @@ declare global {
 
   interface ConfigAPI {
     getApiKeys: () => Promise<{ hasGeminiKey: boolean }>
-    saveApiKeys: (keys: { geminiKey: string }) => Promise<{ success: boolean; error?: string }>
+    saveApiKeys: (keys: {
+      geminiKey?: string
+      googleClientId?: string
+      googleClientSecret?: string
+    }) => Promise<{ success: boolean; error?: string }>
   }
 
   interface EmailAPI {
-    // Watcher Management
     startWatcher: (
       config: EmailWatcherConfig
     ) => Promise<{ success: boolean; watcherId?: string; error?: string }>
-    stopWatcher: (watcherId: string) => Promise<{ success: boolean; error?: string }>
-    deleteWatcher: (watcherId: string) => Promise<{ success: boolean; error?: string }>
-    pauseWatcher: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
-    resumeWatcher: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
-
+    stopWatcher: (watcherId: string) => Promise<{ success: boolean }>
+    deleteWatcher: (watcherId: string) => Promise<{ success: boolean }>
+    pauseWatcher: (watcherId: string) => Promise<{ success: boolean }>
+    resumeWatcher: (watcherId: string) => Promise<{ success: boolean }>
     getStatus: (
       watcherId: string
     ) => Promise<{
@@ -305,27 +316,32 @@ declare global {
       lastChecked: string | null
       stats: EmailWatcherStats
     } | null>
+    updateWatcher: (
+      watcherId: string,
+      updates: Partial<EmailWatcherConfig>
+    ) => Promise<{ success: boolean; error?: string }>
     getAllWatchers: () => Promise<EmailWatcherConfig[]>
     manualCheck: (watcherId: string) => Promise<{ success: boolean; error?: string }>
     getMatches: (watcherId: string) => Promise<EmailMatch[]>
     getActivity: (watcherId: string) => Promise<EmailActivityEntry[]>
-
-    // Events
+    deleteMessage: (
+      watcherId: string,
+      messageId: string,
+      fromGmail: boolean
+    ) => Promise<{ success: boolean; error?: string }>
     onWatcherStarted: (callback: (watcherId: string) => void) => () => void
-    onMatchFound: (
-      callback: (data: { watcherId: string; email: EmailMatch }) => void
-    ) => () => void
+    onMatchFound: (callback: (data: { watcherId: string; email: EmailMatch }) => void) => () => void
     onActivity: (
       callback: (data: { watcherId: string; entry: EmailActivityEntry }) => void
     ) => () => void
     onStatsUpdated: (
       callback: (data: { watcherId: string; stats: EmailWatcherStats }) => void
     ) => () => void
+    onError: (callback: (data: { watcherId: string; error: string }) => void) => () => void
     onCheckStarted: (callback: (data: { watcherId: string }) => void) => () => void
     onCheckCompleted: (
       callback: (data: { watcherId: string; emailsFound: number }) => void
     ) => () => void
-    onError: (callback: (data: { watcherId: string; error: string }) => void) => () => void
   }
 
   interface ElectronAPI {

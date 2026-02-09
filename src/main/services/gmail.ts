@@ -295,3 +295,182 @@ export async function fetchEmailDetails(messageId: string): Promise<EmailDetail 
     return null
   }
 }
+
+export interface ProcessedEmail {
+  id: string
+  threadId: string
+  subject: string
+  from: string
+  date: string
+  body: string
+  attachments: AttachmentInfo[]
+}
+
+export interface SearchProcessResult {
+  success: boolean
+  emailsFound: number
+  processedEmails: ProcessedEmail[]
+  error?: string
+}
+
+export async function searchAndProcessEmails(
+  query: string,
+  outputFolder: string,
+  maxEmails: number = 20
+): Promise<SearchProcessResult> {
+  const auth = getAuthClient()
+  if (!auth || !(await isSignedIn())) {
+    return {
+      success: false,
+      emailsFound: 0,
+      processedEmails: [],
+      error: 'Not signed into Google'
+    }
+  }
+
+  const gmail = google.gmail({ version: 'v1', auth })
+
+  try {
+    // Ensure output folder exists
+    await fs.mkdir(outputFolder, { recursive: true })
+
+    // Search for emails - NOT enforcing has:attachment
+    const listResponse = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: maxEmails
+    })
+
+    const messages = listResponse.data.messages || []
+    console.log(`[GMAIL] Found ${messages.length} emails to process`)
+
+    if (messages.length === 0) {
+      return {
+        success: true,
+        emailsFound: 0,
+        processedEmails: []
+      }
+    }
+
+    const processedEmails: ProcessedEmail[] = []
+
+    for (const msg of messages) {
+      try {
+        const detail = await gmail.users.messages.get({
+          userId: 'me',
+          id: msg.id!,
+          format: 'full'
+        })
+
+        const headers = detail.data.payload?.headers || []
+        const subject = headers.find((h) => h.name === 'Subject')?.value || '(No Subject)'
+        const from = headers.find((h) => h.name === 'From')?.value || 'Unknown'
+        const dateHeader = headers.find((h) => h.name === 'Date')?.value || ''
+        const emailDate = dateHeader
+          ? new Date(dateHeader).toISOString().split('T')[0]
+          : 'unknown-date'
+
+        // Extract Body
+        let body = ''
+        if (detail.data.payload?.body?.data) {
+          body = Buffer.from(detail.data.payload.body.data, 'base64').toString('utf-8')
+        } else if (detail.data.payload?.parts) {
+          const textPart = detail.data.payload.parts.find((p) => p.mimeType === 'text/plain')
+          const htmlPart = detail.data.payload.parts.find((p) => p.mimeType === 'text/html')
+          const partToUse = textPart || htmlPart
+          
+          if (partToUse && partToUse.body?.data) {
+            body = Buffer.from(partToUse.body.data, 'base64').toString('utf-8')
+          }
+        }
+
+        // Process Attachments
+        const attachments: AttachmentInfo[] = []
+        const parts = detail.data.payload?.parts || []
+        
+        // Helper to find attachments recursively
+        const findAttachments = (parts: any[]) => {
+          const found: any[] = []
+          for (const part of parts) {
+            if (part.filename && part.filename.length > 0 && part.body?.attachmentId) {
+              found.push(part)
+            }
+            if (part.parts) {
+              found.push(...findAttachments(part.parts))
+            }
+          }
+          return found
+        }
+        
+        const attachmentParts = findAttachments(parts)
+
+        for (const part of attachmentParts) {
+          const filename = part.filename!
+          const mimeType = part.mimeType || 'application/octet-stream'
+
+          // Only download images and PDFs
+          if (!mimeType.includes('image') && !mimeType.includes('pdf')) {
+            continue
+          }
+
+          try {
+            const attachment = await gmail.users.messages.attachments.get({
+              userId: 'me',
+              messageId: msg.id!,
+              id: part.body!.attachmentId!
+            })
+
+            const data = attachment.data.data!
+            const buffer = Buffer.from(data, 'base64')
+
+            // Create unique filename
+            const ext = path.extname(filename) || '.bin'
+            const baseName = path.basename(filename, ext).replace(/[^a-z0-9]/gi, '_')
+            const uniqueName = `${emailDate}_${baseName}${ext}`
+            const localPath = path.join(outputFolder, uniqueName)
+
+            await fs.writeFile(localPath, buffer)
+
+            attachments.push({
+              filename: uniqueName,
+              mimeType,
+              size: buffer.length,
+              localPath
+            })
+            
+            console.log(`[GMAIL] Downloaded: ${uniqueName}`)
+          } catch (err) {
+            console.error(`[GMAIL] Error downloading ${filename}:`, err)
+          }
+        }
+
+        processedEmails.push({
+          id: msg.id!,
+          threadId: msg.threadId!,
+          subject,
+          from,
+          date: emailDate,
+          body,
+          attachments
+        })
+
+      } catch (err) {
+        console.error(`[GMAIL] Error processing message ${msg.id}:`, err)
+      }
+    }
+
+    return {
+      success: true,
+      emailsFound: messages.length,
+      processedEmails
+    }
+  } catch (err) {
+    console.error('[GMAIL] Process error:', err)
+    return {
+      success: false,
+      emailsFound: 0,
+      processedEmails: [],
+      error: String(err)
+    }
+  }
+}

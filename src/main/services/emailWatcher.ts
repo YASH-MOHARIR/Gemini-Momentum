@@ -7,7 +7,6 @@ import { google } from 'googleapis'
 import Store from 'electron-store'
 import { getAuthClient, isSignedIn } from './googleAuth'
 import { evaluateEmail } from './gemini/emailClassifier'
-import { getClient, MODELS } from './gemini/client'
 import * as gmailService from './gmail'
 
 
@@ -300,6 +299,10 @@ export function getMatches(watcherId: string): EmailMatch[] {
 export function getActivity(watcherId: string): EmailActivityEntry[] {
   const instance = watchers.get(watcherId)
   return instance ? [...instance.activity] : []
+}
+
+export function getWatcherConfig(watcherId: string): EmailWatcherConfig | undefined {
+  return watchers.get(watcherId)?.config
 }
 
 export function manualCheckEmails(watcherId: string): { success: boolean; error?: string } {

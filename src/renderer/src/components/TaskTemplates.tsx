@@ -1,9 +1,11 @@
 import React from 'react'
-import { FolderSync, Receipt, Sparkles, HardDrive, Mail, Images, FileText } from 'lucide-react'
+import { 
+  FileText, Sparkles, FolderSync, Receipt, HardDrive, Mail, Images
+} from 'lucide-react'
 
 interface TaskTemplate {
   id: string
-  icon: React.ReactNode
+  icon: React.ReactElement
   label: string
   command: string
   requiresGoogle?: boolean
@@ -76,7 +78,7 @@ export default function TaskTemplates({
   onSelectTemplate,
   disabled = false,
   isGoogleConnected = false
-}: TaskTemplatesProps): JSX.Element {
+}: TaskTemplatesProps): React.ReactElement {
   return (
     <div className="flex flex-wrap gap-1.5 mb-2">
       {templates.map((template) => {
