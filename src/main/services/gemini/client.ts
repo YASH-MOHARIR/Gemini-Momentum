@@ -11,24 +11,20 @@ export type ExecutorProfile = 'flash-minimal' | 'flash-high' | 'pro-high'
 
 export interface ExecutorConfig {
   model: string
-  thinkingLevel: 'minimal' | 'low' | 'medium' | 'high'
   description: string
 }
 
 export const EXECUTOR_CONFIGS: Record<ExecutorProfile, ExecutorConfig> = {
   'flash-minimal': {
     model: MODELS.FLASH,
-    thinkingLevel: 'minimal',
     description: 'Fast, simple operations'
   },
   'flash-high': {
     model: MODELS.FLASH,
-    thinkingLevel: 'high',
     description: 'Complex file operations, vision, batch processing'
   },
   'pro-high': {
     model: MODELS.PRO,
-    thinkingLevel: 'high',
     description: 'Complex reasoning, ambiguous requests, multi-step planning'
   }
 }

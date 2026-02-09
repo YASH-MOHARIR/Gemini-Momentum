@@ -440,6 +440,21 @@ ipcMain.handle('agent:get-metrics', () => {
   return gemini.getMetrics()
 })
 
+// Undo operations
+ipcMain.handle('undo:get-recent', () => {
+  // Use dynamic import for TypeScript files
+  return import('./services/undoService').then(m => m.undoService.getRecentOperations(10))
+})
+
+ipcMain.handle('undo:execute', async (_, operationId: string) => {
+  const undoService = (await import('./services/undoService')).undoService
+  const result = await undoService.undoOperation(operationId)
+  if (result.success) {
+    mainWindow?.webContents.send('fs:changed')
+  }
+  return result
+})
+
 ipcMain.handle('agent:reset-metrics', () => {
   gemini.resetMetrics()
 })
@@ -692,6 +707,9 @@ app.whenReady().then(() => {
 
   // Initialize Email Watcher Service (loads persistent watchers)
   emailWatcher.initEmailService(mainWindow!)
+  
+  // Initialize File Watcher Service (loads persistent watchers/orbits)
+  fileWatcher.initFileWatcherService(mainWindow!)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

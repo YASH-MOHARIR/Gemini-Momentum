@@ -419,6 +419,28 @@ const api: ElectronAPI = {
 
     // Metrics
     getMetrics: (): Promise<SessionMetrics> => ipcRenderer.invoke('agent:get-metrics'),
+    
+    // Undo operations
+    getRecentUndoOperations: (): Promise<Array<{
+      id: string
+      type: 'move' | 'rename' | 'delete' | 'create'
+      timestamp: number
+      originalPath: string
+      newPath?: string
+      originalName?: string
+      newName?: string
+    }>> => ipcRenderer.invoke('undo:get-recent'),
+    undoOperation: (operationId: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('undo:execute', operationId),
+    onUndoOperationAdded: (callback: (data: {
+      type: string
+      originalPath: string
+      newPath?: string
+    }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('undo:operation-added', handler)
+      return () => ipcRenderer.removeListener('undo:operation-added', handler)
+    },
     resetMetrics: (): Promise<void> => ipcRenderer.invoke('agent:reset-metrics'),
 
     // Streaming events

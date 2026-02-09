@@ -161,25 +161,34 @@ function FileTreeItem({
 
     // Regular click: Single selection
     if (!isFolder) {
-      selectFile(entry.path)
-    } else {
-      // For folders, clear selection and expand/collapse
-      clearSelection()
-    }
-
-    // Handle folder expansion
-    if (isFolder) {
-      if (!isExpanded && children.length === 0) {
-        setIsLoading(true)
-        try {
-          const loadedChildren = await window.api.fs.expandDir(entry.path)
-          setChildren(loadedChildren)
-        } catch (err) {
-          console.error('Failed to load directory:', err)
-        }
-        setIsLoading(false)
+      // If file is already selected, unselect it
+      if (isSelected || isMultiSelected) {
+        toggleFileSelection(entry.path)
+      } else {
+        selectFile(entry.path)
       }
-      setIsExpanded(!isExpanded)
+    } else {
+      // For folders: if already selected, unselect it; otherwise select it
+      if (isSelected || isMultiSelected) {
+        toggleFileSelection(entry.path)
+      } else {
+        selectFile(entry.path)
+      }
+      
+      // Handle folder expansion (only if not unselecting)
+      if (!isSelected && !isMultiSelected) {
+        if (!isExpanded && children.length === 0) {
+          setIsLoading(true)
+          try {
+            const loadedChildren = await window.api.fs.expandDir(entry.path)
+            setChildren(loadedChildren)
+          } catch (err) {
+            console.error('Failed to load directory:', err)
+          }
+          setIsLoading(false)
+        }
+        setIsExpanded(!isExpanded)
+      }
     }
 
     onFileSelect?.(entry)

@@ -2,6 +2,7 @@ import chokidar from 'chokidar'
 import * as path from 'path'
 import * as fs from 'fs/promises'
 import { BrowserWindow } from 'electron'
+import Store from 'electron-store'
 import { processFileWithRules, RuleMatch } from './ruleProcessor'
 import { logActivity } from './activityLogger'
 
@@ -51,6 +52,19 @@ interface WatcherInstance {
   stats: WatcherStats
 }
 
+interface WatcherPersistence {
+  config: AgentConfig
+  stats: WatcherStats
+  isPaused: boolean
+}
+
+// ============ Persistence ============
+
+const store = new Store({
+  name: 'momentum-file-watchers',
+  encryptionKey: 'momentum-secure-key-2026'
+})
+
 // ============ State ============
 
 const watchers = new Map<string, WatcherInstance>()
@@ -59,6 +73,91 @@ let mainWindowRef: BrowserWindow | null = null
 const MAX_WATCHERS = 5
 
 // ============ Public Functions ============
+
+export function initFileWatcherService(mainWindow?: BrowserWindow): void {
+  if (mainWindow) mainWindowRef = mainWindow
+  loadWatchersFromStore()
+}
+
+function loadWatchersFromStore(): void {
+  const data = store.get('watchers', {}) as Record<string, WatcherPersistence>
+
+  for (const [id, saved] of Object.entries(data)) {
+    if (watchers.has(id)) continue
+
+    // Restore the watcher configuration
+    const config = saved.config
+    const wasPaused = saved.isPaused
+
+    console.log(`[FILE WATCHER] Loading watcher ${id} from store (was ${wasPaused ? 'paused' : 'running'})`)
+
+    // Always create the watcher instance, but set paused state appropriately
+    if (!mainWindowRef) {
+      console.log(`[FILE WATCHER] No main window available, skipping watcher ${id}`)
+      continue
+    }
+
+    try {
+      const watcher = chokidar.watch(config.watchFolders, {
+        ignored: [
+          /(^|[\/\\])\../,
+          /momentum_activity_log\.xlsx$/,
+          /~\$.*/,
+          /\.tmp$/i,
+          /\.crdownload$/i,
+          /\.part$/i
+        ],
+        persistent: true,
+        ignoreInitial: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 2000,
+          pollInterval: 100
+        },
+        depth: 0
+      })
+
+      const stats: WatcherStats = {
+        filesProcessed: saved.stats.filesProcessed,
+        startTime: saved.stats.startTime || Date.now(),
+        aiCalls: saved.stats.aiCalls,
+        errors: saved.stats.errors
+      }
+
+      watchers.set(id, {
+        watcher,
+        config,
+        isPaused: wasPaused,
+        stats
+      })
+
+      setupWatcherEvents(id, watcher)
+    } catch (error) {
+      console.error(`[FILE WATCHER] Failed to restore watcher ${id}:`, error)
+    }
+  }
+  console.log(`[FILE WATCHER SERVICE] Loaded ${watchers.size} watchers from store`)
+}
+
+function saveWatcherToStore(watcherId: string): void {
+  const instance = watchers.get(watcherId)
+  if (!instance) return
+
+  const allData = store.get('watchers', {}) as Record<string, WatcherPersistence>
+
+  allData[watcherId] = {
+    config: instance.config,
+    stats: instance.stats,
+    isPaused: instance.isPaused
+  }
+
+  store.set('watchers', allData)
+}
+
+function deleteWatcherFromStore(watcherId: string): void {
+  const allData = store.get('watchers', {}) as Record<string, WatcherPersistence>
+  delete allData[watcherId]
+  store.set('watchers', allData)
+}
 
 export function startWatcher(
   agentConfig: AgentConfig,
@@ -82,6 +181,40 @@ export function startWatcher(
 
   mainWindowRef = mainWindow
   const watcherId = agentConfig.id
+
+  // Check if watcher already exists (e.g., loaded from store)
+  const existingInstance = watchers.get(watcherId)
+  if (existingInstance) {
+    // Update config but preserve stats and watcher
+    existingInstance.config = agentConfig
+    existingInstance.isPaused = false
+    // Update the watcher paths if they changed
+    if (JSON.stringify(existingInstance.config.watchFolders.sort()) !== JSON.stringify(agentConfig.watchFolders.sort())) {
+      existingInstance.watcher.close()
+      const newWatcher = chokidar.watch(agentConfig.watchFolders, {
+        ignored: [
+          /(^|[\/\\])\../,
+          /momentum_activity_log\.xlsx$/,
+          /~\$.*/,
+          /\.tmp$/i,
+          /\.crdownload$/i,
+          /\.part$/i
+        ],
+        persistent: true,
+        ignoreInitial: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 2000,
+          pollInterval: 100
+        },
+        depth: 0
+      })
+      existingInstance.watcher = newWatcher
+      setupWatcherEvents(watcherId, newWatcher)
+    }
+    saveWatcherToStore(watcherId)
+    console.log(`[WATCHER ${watcherId}] Updated existing watcher`)
+    return { success: true, watcherId }
+  }
 
   console.log(`[WATCHER ${watcherId}] Starting watcher on:`, agentConfig.watchFolders)
   console.log(
@@ -122,24 +255,10 @@ export function startWatcher(
       stats
     })
 
-    watcher.on('add', async (filePath) => {
-      const instance = watchers.get(watcherId)
-      if (!instance || instance.isPaused) {
-        console.log(`[WATCHER ${watcherId}] Paused, ignoring: ${filePath}`)
-        return
-      }
-      await handleNewFile(watcherId, filePath)
-    })
+    setupWatcherEvents(watcherId, watcher)
 
-    watcher.on('error', (error) => {
-      console.error(`[WATCHER ${watcherId}] Error:`, error)
-      mainWindowRef?.webContents.send('watcher:error', watcherId, String(error))
-    })
-
-    watcher.on('ready', () => {
-      console.log(`[WATCHER ${watcherId}] Ready and watching`)
-      mainWindowRef?.webContents.send('watcher:ready', watcherId)
-    })
+    // Save to store after successful creation
+    saveWatcherToStore(watcherId)
 
     return { success: true, watcherId }
   } catch (error) {
@@ -153,6 +272,7 @@ export function stopWatcher(watcherId: string): { success: boolean } {
   if (instance) {
     instance.watcher.close()
     watchers.delete(watcherId)
+    deleteWatcherFromStore(watcherId)
     console.log(`[WATCHER ${watcherId}] Stopped`)
     return { success: true }
   }
@@ -166,6 +286,7 @@ export function stopAllWatchers(): { success: boolean; count: number } {
     console.log(`[WATCHER ${watcherId}] Stopped`)
   }
   watchers.clear()
+  store.delete('watchers')
   return { success: true, count }
 }
 
@@ -173,6 +294,7 @@ export function pauseWatcher(watcherId: string): { success: boolean; paused: boo
   const instance = watchers.get(watcherId)
   if (instance) {
     instance.isPaused = true
+    saveWatcherToStore(watcherId)
     console.log(`[WATCHER ${watcherId}] Paused`)
     return { success: true, paused: true }
   }
@@ -183,6 +305,7 @@ export function resumeWatcher(watcherId: string): { success: boolean; paused: bo
   const instance = watchers.get(watcherId)
   if (instance) {
     instance.isPaused = false
+    saveWatcherToStore(watcherId)
     console.log(`[WATCHER ${watcherId}] Resumed`)
     return { success: true, paused: false }
   }
@@ -228,6 +351,7 @@ export function updateRules(watcherId: string, newRules: AgentRule[]): { success
   const instance = watchers.get(watcherId)
   if (instance) {
     instance.config.rules = newRules
+    saveWatcherToStore(watcherId)
     console.log(
       `[WATCHER ${watcherId}] Rules updated:`,
       newRules.map((r) => r.text)
@@ -238,6 +362,27 @@ export function updateRules(watcherId: string, newRules: AgentRule[]): { success
 }
 
 // ============ Internal Functions ============
+
+function setupWatcherEvents(watcherId: string, watcher: ReturnType<typeof chokidar.watch>): void {
+  watcher.on('add', async (filePath) => {
+    const instance = watchers.get(watcherId)
+    if (!instance || instance.isPaused) {
+      console.log(`[WATCHER ${watcherId}] Paused, ignoring: ${filePath}`)
+      return
+    }
+    await handleNewFile(watcherId, filePath)
+  })
+
+  watcher.on('error', (error) => {
+    console.error(`[WATCHER ${watcherId}] Error:`, error)
+    mainWindowRef?.webContents.send('watcher:error', watcherId, String(error))
+  })
+
+  watcher.on('ready', () => {
+    console.log(`[WATCHER ${watcherId}] Ready and watching`)
+    mainWindowRef?.webContents.send('watcher:ready', watcherId)
+  })
+}
 
 async function handleNewFile(watcherId: string, filePath: string): Promise<void> {
   const instance = watchers.get(watcherId)
@@ -264,11 +409,13 @@ async function handleNewFile(watcherId: string, filePath: string): Promise<void>
 
     if (result.usedVision) {
       instance.stats.aiCalls++
+      saveWatcherToStore(watcherId)
     }
 
     if (result.action === 'move' && result.destination) {
       const entry = await executeMove(watcherId, filePath, result)
       instance.stats.filesProcessed++
+      saveWatcherToStore(watcherId)
 
       if (instance.config.enableActivityLog) {
         await logActivity(instance.config.logPath, entry)
@@ -277,6 +424,7 @@ async function handleNewFile(watcherId: string, filePath: string): Promise<void>
       mainWindowRef?.webContents.send('watcher:file-processed', watcherId, entry)
     } else {
       instance.stats.filesProcessed++
+      saveWatcherToStore(watcherId)
 
       const entry: ActivityEntry = {
         id: Date.now().toString(),
@@ -299,6 +447,7 @@ async function handleNewFile(watcherId: string, filePath: string): Promise<void>
   } catch (error) {
     console.error(`[WATCHER ${watcherId}] Error processing ${fileName}:`, error)
     instance.stats.errors++
+    saveWatcherToStore(watcherId)
 
     const entry: ActivityEntry = {
       id: Date.now().toString(),

@@ -119,7 +119,8 @@ export async function classifyTask(
       model: MODELS.FLASH,
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 500
+        maxOutputTokens: 1000,
+        responseMimeType: 'application/json' // Force JSON mode to prevent router crashes
       }
     })
 

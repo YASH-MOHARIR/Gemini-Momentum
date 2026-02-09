@@ -205,6 +205,16 @@ function App(): ReactElement {
   const [showTemplates, setShowTemplates] = useState(true)
   const [isCheckingSetup, setIsCheckingSetup] = useState(true)
   const [needsSetup, setNeedsSetup] = useState(false)
+  const [pendingRequest, setPendingRequest] = useState<{ message: string; chatHistory: Array<{ role: 'user' | 'assistant'; content: string }> } | null>(null)
+  const [undoOperations, setUndoOperations] = useState<Array<{
+    id: string
+    type: 'move' | 'rename' | 'delete' | 'create'
+    timestamp: number
+    originalPath: string
+    newPath?: string
+    originalName?: string
+    newName?: string
+  }>>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -237,6 +247,7 @@ function App(): ReactElement {
     addTaskStep,
     updateTaskStep,
     completeTask,
+    refreshFolder,
     setStorageAnalysis,
     hideBeforeAfter,
     selectAll,
@@ -263,6 +274,45 @@ function App(): ReactElement {
     }
     checkSetup()
   }, [])
+
+  // Retry pending request when file/folder is selected
+  useEffect(() => {
+    if (pendingRequest && !isProcessing) {
+      const selectedFiles = getSelectedFiles()
+      const hasSelection = selectedFiles.length > 0 || selectedFile !== null
+      
+      if (hasSelection) {
+        // Retry the pending request
+        const requestToRetry = pendingRequest
+        setPendingRequest(null)
+        setProcessing(true)
+        setIsStreaming(true)
+        setStreamingContent('')
+        startTask(requestToRetry.message)
+        
+        // Add a message indicating we're retrying
+        addMessage({
+          role: 'assistant',
+          content: 'Great! Processing your request now...',
+          isError: false
+        })
+        
+        // Small delay to ensure UI updates, then process
+        const timeoutId = setTimeout(() => {
+          processChatRequest(requestToRetry.message, requestToRetry.chatHistory, true).catch(
+            (err) => {
+              console.error('Failed to retry request:', err)
+              setProcessing(false)
+              setIsStreaming(false)
+            }
+          )
+        }, 300)
+        
+        return () => clearTimeout(timeoutId)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFile, pendingRequest, isProcessing])
 
   const handleSetupComplete = async () => {
     setNeedsSetup(false)
@@ -458,6 +508,12 @@ function App(): ReactElement {
       useEmailStore.getState().updateStats(watcherId, stats)
     })
 
+    // Undo operations
+    const unsubUndoAdded = window.api.agent.onUndoOperationAdded?.((data) => {
+      // Refresh undo operations list
+      window.api.agent.getRecentUndoOperations().then(setUndoOperations).catch(console.error)
+    })
+
     return () => {
       unsubChunk()
       unsubEnd()
@@ -468,8 +524,14 @@ function App(): ReactElement {
       unsubMatchFound()
       unsubActivity()
       unsubStats()
+      unsubUndoAdded?.()
     }
   }, [addTaskStep, updateTaskStep, setStorageAnalysis])
+
+  // Load undo operations on mount
+  useEffect(() => {
+    window.api.agent.getRecentUndoOperations().then(setUndoOperations).catch(console.error)
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -499,6 +561,150 @@ function App(): ReactElement {
     setSelectedFile(entry)
   }
 
+  // Helper function to check if a task requires file/folder selection
+  const requiresFileSelection = (taskType: string): boolean => {
+    const fileOperationTypes = [
+      'single_file_op',
+      'multi_file_op',
+      'file_organization',
+      'data_extraction',
+      'image_analysis',
+      'batch_processing'
+    ]
+    return fileOperationTypes.includes(taskType)
+  }
+
+  // Process the actual chat request
+  const processChatRequest = async (
+    userMessage: string,
+    chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+    retryAfterSelection = false
+  ) => {
+    // Check if we need to auto-create a folder
+    let activeFolderPaths = folders.map((f) => f.path)
+
+    if (activeFolderPaths.length === 0) {
+      const defaultPath = await window.api.fs.getDefaultPath()
+      const exists = await window.api.fs.pathExists(defaultPath)
+
+      if (!exists) {
+        await window.api.fs.createFolder(defaultPath)
+      }
+
+      // Add to app state
+      const entries = await window.api.fs.listDir(defaultPath)
+      const folderName = defaultPath.split(/[/\\]/).pop() || defaultPath
+      addFolder({
+        path: defaultPath,
+        name: folderName,
+        entries,
+        grantedAt: new Date().toISOString()
+      })
+
+      activeFolderPaths = [defaultPath]
+    }
+
+    const selectedFiles = getSelectedFiles()
+    const hasSelection = selectedFiles.length > 0 || selectedFile !== null
+
+    // If retrying after selection, we should have a selection now
+    if (retryAfterSelection && !hasSelection) {
+      addMessage({
+        role: 'assistant',
+        content: 'Please select a file or folder to continue.',
+        isError: true
+      })
+      setProcessing(false)
+      setIsStreaming(false)
+      setStreamingContent('')
+      return
+    }
+
+    try {
+      // Determine if selection is a directory
+      let isSelectedDirectory = false
+      let selectedPaths: string[] | undefined
+      
+      if (selectedFiles.length > 0) {
+        selectedPaths = selectedFiles
+        // Check if single selection is a directory
+        if (selectedFiles.length === 1) {
+          // Check if it's a directory by looking in folder entries
+          for (const folder of folders) {
+            const found = folder.entries.find(e => e.path === selectedFiles[0])
+            if (found?.isDirectory) {
+              isSelectedDirectory = true
+              break
+            }
+          }
+        }
+      } else if (selectedFile) {
+        selectedPaths = [selectedFile.path]
+        isSelectedDirectory = selectedFile.isDirectory
+      }
+
+      const response = await window.api.agent.chat(
+        chatHistory,
+        activeFolderPaths,
+        selectedPaths,
+        isSelectedDirectory
+      )
+      setIsStreaming(false)
+      setStreamingContent('')
+      
+      if (response.error) {
+        // Check if error is related to missing files/folders
+        const errorLower = response.error.toLowerCase()
+        if (
+          errorLower.includes('no such file') ||
+          errorLower.includes('cannot find') ||
+          errorLower.includes('path') ||
+          errorLower.includes('file not found') ||
+          errorLower.includes('folder not found')
+        ) {
+          addMessage({
+            role: 'assistant',
+            content: 'It looks like this operation requires a file or folder to be selected. Please select a file or folder and try again.',
+            isError: true
+          })
+        } else {
+          addMessage({ role: 'assistant', content: response.error, isError: true })
+        }
+        completeTask('error')
+      } else {
+        addMessage({ role: 'assistant', content: response.message, toolCalls: response.toolCalls })
+        completeTask('completed')
+        // Clear pending request if successful
+        if (retryAfterSelection) {
+          setPendingRequest(null)
+        }
+      }
+    } catch (err) {
+      setIsStreaming(false)
+      setStreamingContent('')
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      const errorLower = errorMessage.toLowerCase()
+      
+      if (
+        errorLower.includes('no such file') ||
+        errorLower.includes('cannot find') ||
+        errorLower.includes('path') ||
+        errorLower.includes('file not found') ||
+        errorLower.includes('folder not found')
+      ) {
+        addMessage({
+          role: 'assistant',
+          content: 'This operation requires a file or folder to be selected. Please select a file or folder and try again.',
+          isError: true
+        })
+      } else {
+        addMessage({ role: 'assistant', content: `Failed to get response: ${errorMessage}`, isError: true })
+      }
+      completeTask('error')
+    }
+    setProcessing(false)
+  }
+
   const handleSendMessage = async (messageOverride?: string) => {
     const userMessage = messageOverride || inputValue.trim()
     if (!userMessage || isProcessing) return
@@ -510,66 +716,49 @@ function App(): ReactElement {
     setProcessing(true)
     startTask(userMessage)
 
-    // Check if we need to auto-create a folder
-    let activeFolderPaths = folders.map((f) => f.path)
+    const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map(
+      (m) => ({ role: m.role, content: m.content })
+    )
 
     try {
-      if (activeFolderPaths.length === 0) {
-        const defaultPath = await window.api.fs.getDefaultPath()
-        const exists = await window.api.fs.pathExists(defaultPath)
-
-        if (!exists) {
-          await window.api.fs.createFolder(defaultPath)
-          // Add a system message or notification?
-        }
-
-        // Add to app state
-        const entries = await window.api.fs.listDir(defaultPath)
-        const folderName = defaultPath.split(/[/\\]/).pop() || defaultPath
-        addFolder({
-          path: defaultPath,
-          name: folderName,
-          entries,
-          grantedAt: new Date().toISOString()
-        })
-
-        activeFolderPaths = [defaultPath]
-
-        // Notify user in chat stream or separate message?
-        // For now, we just rely on the UI updating to show the folder
-      }
-
-      const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map(
-        (m) => ({ role: m.role, content: m.content })
-      )
-
+      // First, classify the task to see if it requires file/folder selection
       const selectedFiles = getSelectedFiles()
-      const response = await window.api.agent.chat(
-        chatHistory,
-        activeFolderPaths,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (selectedFiles.length > 0
-          ? selectedFiles
-          : selectedFile
-            ? [selectedFile.path]
-            : undefined) as any
-      )
-      setIsStreaming(false)
-      setStreamingContent('')
-      if (response.error) {
-        addMessage({ role: 'assistant', content: response.error, isError: true })
-        completeTask('error')
-      } else {
-        addMessage({ role: 'assistant', content: response.message, toolCalls: response.toolCalls })
-        completeTask('completed')
+      const hasSelection = selectedFiles.length > 0 || selectedFile !== null
+      
+      // Quick classification to check if file selection is needed
+      // We'll do a lightweight check first
+      const taskKeywords = [
+        'file', 'folder', 'directory', 'organize', 'move', 'copy', 'delete',
+        'read', 'write', 'create', 'analyze', 'process', 'extract', 'receipt',
+        'image', 'photo', 'document', 'pdf', 'spreadsheet', 'report'
+      ]
+      const messageLower = userMessage.toLowerCase()
+      const mightNeedSelection = taskKeywords.some(keyword => messageLower.includes(keyword))
+
+      if (mightNeedSelection && !hasSelection && folders.length > 0) {
+        // Store the request and prompt user to select
+        setPendingRequest({ message: userMessage, chatHistory })
+        addMessage({
+          role: 'assistant',
+          content: 'This operation requires a file or folder to be selected. Please select a file or folder from the sidebar, then I\'ll continue with your request.',
+          isError: false
+        })
+        setProcessing(false)
+        setIsStreaming(false)
+        setStreamingContent('')
+        completeTask('error') // Mark task as needing user action
+        return
       }
+
+      // Process the request normally
+      await processChatRequest(userMessage, chatHistory)
     } catch (err) {
       setIsStreaming(false)
       setStreamingContent('')
-      addMessage({ role: 'assistant', content: `Failed to get response: ${err}`, isError: true })
+      addMessage({ role: 'assistant', content: `Failed to process request: ${err}`, isError: true })
       completeTask('error')
+      setProcessing(false)
     }
-    setProcessing(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -882,6 +1071,37 @@ function App(): ReactElement {
                       disabled={isProcessing}
                       className="flex-1 bg-transparent px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none disabled:opacity-50"
                     />
+                    {undoOperations.length > 0 && (
+                      <button
+                        onClick={async () => {
+                          const latestOp = undoOperations[0]
+                          const result = await window.api.agent.undoOperation(latestOp.id)
+                          if (result.success) {
+                            addMessage({
+                              role: 'assistant',
+                              content: `Undone: ${latestOp.type === 'move' ? 'Moved file back' : latestOp.type === 'rename' ? 'Renamed file back' : 'Operation undone'}`,
+                              isError: false
+                            })
+                            // Refresh undo list
+                            window.api.agent.getRecentUndoOperations().then(setUndoOperations).catch(console.error)
+                            // Refresh file tree
+                            folders.forEach(f => refreshFolder(f.path))
+                          } else {
+                            addMessage({
+                              role: 'assistant',
+                              content: `Failed to undo: ${result.error || 'Unknown error'}`,
+                              isError: true
+                            })
+                          }
+                        }}
+                        className="p-2 m-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-md transition-colors"
+                        title={`Undo ${undoOperations[0]?.type || 'operation'}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       onClick={() => handleSendMessage()}
                       disabled={!inputValue.trim() || isProcessing}

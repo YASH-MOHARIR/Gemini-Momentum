@@ -82,13 +82,56 @@ export async function executeTool(
         }
         break
 
-      case 'move_file':
-        result = await fileSystem.moveFile(args.source_path, args.destination_path)
+      case 'move_file': {
+        const moveResult = await fileSystem.moveFile(args.source_path, args.destination_path)
+        if (moveResult.success && moveResult.data?.newPath) {
+          // Track for undo
+          const undoService = await import('../undoService')
+          undoService.undoService.addOperation({
+            type: 'move',
+            originalPath: args.source_path,
+            newPath: moveResult.data.newPath
+          })
+          // Notify UI about undo availability
+          if (mainWindow) {
+            mainWindow.webContents.send('undo:operation-added', {
+              type: 'move',
+              originalPath: args.source_path,
+              newPath: moveResult.data.newPath
+            })
+          }
+        }
+        result = moveResult
         break
+      }
 
-      case 'rename_file':
-        result = await fileSystem.renameFile(args.path, args.new_name)
+      case 'rename_file': {
+        const renameResult = await fileSystem.renameFile(args.path, args.new_name)
+        if (renameResult.success && renameResult.data?.newPath) {
+          // Track for undo
+          const undoService = await import('../undoService')
+          const originalName = path.basename(args.path)
+          undoService.undoService.addOperation({
+            type: 'rename',
+            originalPath: args.path,
+            newPath: renameResult.data.newPath,
+            originalName,
+            newName: args.new_name
+          })
+          // Notify UI about undo availability
+          if (mainWindow) {
+            mainWindow.webContents.send('undo:operation-added', {
+              type: 'rename',
+              originalPath: args.path,
+              newPath: renameResult.data.newPath,
+              originalName,
+              newName: args.new_name
+            })
+          }
+        }
+        result = renameResult
         break
+      }
 
       case 'copy_file':
         result = await fileSystem.copyFile(args.source_path, args.destination_path)
