@@ -273,7 +273,9 @@ declare global {
   }
 
   interface WatcherAPI {
-    start: (config: AgentConfig) => Promise<{ success: boolean; error?: string; watcherId?: string }>
+    start: (
+      config: AgentConfig
+    ) => Promise<{ success: boolean; error?: string; watcherId?: string }>
     stop: (watcherId: string) => Promise<{ success: boolean }>
     stopAll: () => Promise<{ success: boolean; count: number }>
     pause: (watcherId: string) => Promise<{ success: boolean; paused: boolean }>
@@ -308,9 +310,7 @@ declare global {
     deleteWatcher: (watcherId: string) => Promise<{ success: boolean }>
     pauseWatcher: (watcherId: string) => Promise<{ success: boolean }>
     resumeWatcher: (watcherId: string) => Promise<{ success: boolean }>
-    getStatus: (
-      watcherId: string
-    ) => Promise<{
+    getStatus: (watcherId: string) => Promise<{
       isActive: boolean
       isPaused: boolean
       lastChecked: string | null

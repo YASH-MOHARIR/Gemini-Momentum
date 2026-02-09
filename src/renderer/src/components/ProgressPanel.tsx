@@ -175,11 +175,7 @@ export default function ProgressPanel() {
       {!isProcessing && !currentTask && recentTasks.length === 0 && (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center">
-            <img
-              src={momentumLogo}
-              alt=""
-              className="w-8 h-8 mx-auto mb-2 opacity-20 grayscale"
-            />
+            <img src={momentumLogo} alt="" className="w-8 h-8 mx-auto mb-2 opacity-20 grayscale" />
             <p className="text-sm text-slate-500">No active tasks</p>
             <p className="text-xs text-slate-600 mt-1">Progress will appear here</p>
           </div>

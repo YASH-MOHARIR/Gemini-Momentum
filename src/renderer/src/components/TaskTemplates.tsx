@@ -1,7 +1,5 @@
 import React from 'react'
-import { 
-  FileText, Sparkles, FolderSync, Receipt, HardDrive, Mail, Images
-} from 'lucide-react'
+import { FileText, Sparkles, FolderSync, Receipt, HardDrive, Mail, Images } from 'lucide-react'
 
 interface TaskTemplate {
   id: string
