@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { AlertCircle, CheckCircle, ExternalLink, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { AlertCircle, CheckCircle, ExternalLink, Loader2, Zap } from 'lucide-react'
 import momentumLogo from '../assets/momentum.png'
 
 interface SetupScreenProps {
@@ -11,8 +11,14 @@ export default function SetupScreen({ onComplete }: SetupScreenProps) {
   const [googleClientId, setGoogleClientId] = useState('')
   const [googleClientSecret, setGoogleClientSecret] = useState('')
   const [isValidating, setIsValidating] = useState(false)
+  const [isHackathonLoading, setIsHackathonLoading] = useState(false)
+  const [hasHackathonKeys, setHasHackathonKeys] = useState(false)
   const [error, setError] = useState('')
   const [showGoogleSetup, setShowGoogleSetup] = useState(false)
+
+  useEffect(() => {
+    window.api.config.hasHackathonKeys().then(setHasHackathonKeys)
+  }, [])
 
   const handleSubmit = async () => {
     if (!geminiKey.trim()) {
@@ -40,6 +46,23 @@ export default function SetupScreen({ onComplete }: SetupScreenProps) {
       setError('Failed to save configuration')
     } finally {
       setIsValidating(false)
+    }
+  }
+
+  const handleHackathonSkip = async () => {
+    setIsHackathonLoading(true)
+    setError('')
+    try {
+      const result = await window.api.config.useHackathonKeys()
+      if (result.success) {
+        onComplete()
+      } else {
+        setError(result.error || 'Failed to load hackathon keys')
+      }
+    } catch (err) {
+      setError('Failed to load hackathon keys')
+    } finally {
+      setIsHackathonLoading(false)
     }
   }
 
@@ -152,6 +175,23 @@ export default function SetupScreen({ onComplete }: SetupScreenProps) {
             </>
           )}
         </button>
+
+        {/* Hackathon Judges - Skip Setup */}
+        {hasHackathonKeys && (
+          <button
+            type="button"
+            onClick={handleHackathonSkip}
+            disabled={isHackathonLoading}
+            className="w-full mt-4 py-2.5 px-4 rounded-lg border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 font-medium text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isHackathonLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Zap className="w-4 h-4" />
+            )}
+            CLICK THIS [FOR HACKATHON JUDGES] to skip API setup
+          </button>
+        )}
 
         {/* Footer */}
         <p className="text-center text-zinc-500 text-xs mt-6">

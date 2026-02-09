@@ -48,6 +48,30 @@ GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
+### Hackathon Demo (Skip API Setup)
+
+For hackathon judges or demos, you can pre-configure API keys so judges skip the setup screen:
+
+1. Copy `hackathon-keys.example.json` to `hackathon-keys.json` in the project root
+2. Fill in your Gemini and Google credentials:
+   ```json
+   {
+     "geminiApiKey": "AIza...",
+     "googleClientId": "xxxxx.apps.googleusercontent.com",
+     "googleClientSecret": "GOCSPX-..."
+   }
+   ```
+3. On the setup screen, judges click **"For Hackathon Judges to skip API setup"** to instantly continue
+
+**Alternative:** Use environment variables in `.env`:
+```env
+HACKATHON_GEMINI_API_KEY=AIza...
+HACKATHON_GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
+HACKATHON_GOOGLE_CLIENT_SECRET=GOCSPX-...
+```
+
+> ⚠️ Add `hackathon-keys.json` to `.gitignore` if you don't want to commit your keys. For hackathon submissions, you may include it so judges can skip setup.
+
 ### Google Cloud Setup (Optional)
 
 Required only if you want Gmail and Google Sheets features:

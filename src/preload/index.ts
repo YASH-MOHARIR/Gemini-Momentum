@@ -578,7 +578,10 @@ const api: ElectronAPI = {
   config: {
     getApiKeys: (): Promise<{ hasGeminiKey: boolean }> => ipcRenderer.invoke('config:get-api-keys'),
     saveApiKeys: (keys: { geminiKey: string }): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke('config:save-api-keys', keys)
+      ipcRenderer.invoke('config:save-api-keys', keys),
+    hasHackathonKeys: (): Promise<boolean> => ipcRenderer.invoke('config:has-hackathon-keys'),
+    useHackathonKeys: (): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('config:use-hackathon-keys')
   },
 
   // Email Watcher

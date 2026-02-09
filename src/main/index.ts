@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
+import { existsSync, readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import Store from 'electron-store'
 import icon from '../../resources/momentum.png?asset'
@@ -235,6 +236,88 @@ ipcMain.handle('config:clear-api-keys', () => {
   store.delete('googleClientSecret')
   console.log('[MAIN] API keys cleared')
   return { success: true }
+})
+
+// ============ Hackathon Keys (skip API setup for judges) ============
+
+function loadHackathonKeys(): ApiKeys | null {
+  // 1. Try environment variables first
+  const envGemini = process.env.HACKATHON_GEMINI_API_KEY
+  const envGoogleId = process.env.HACKATHON_GOOGLE_CLIENT_ID
+  const envGoogleSecret = process.env.HACKATHON_GOOGLE_CLIENT_SECRET
+
+  if (envGemini?.trim()) {
+    return {
+      geminiKey: envGemini.trim(),
+      googleClientId: envGoogleId?.trim() || undefined,
+      googleClientSecret: envGoogleSecret?.trim() || undefined
+    }
+  }
+
+  // 2. Try hackathon-keys.json in project root (dev) or app resources (packaged)
+  const possiblePaths = [
+    join(app.getAppPath(), 'hackathon-keys.json'),
+    join(process.resourcesPath || app.getAppPath(), 'hackathon-keys.json')
+  ]
+
+  for (const filePath of possiblePaths) {
+    if (existsSync(filePath)) {
+      try {
+        const data = JSON.parse(readFileSync(filePath, 'utf-8')) as {
+          geminiApiKey?: string
+          googleClientId?: string
+          googleClientSecret?: string
+        }
+        const geminiKey = data.geminiApiKey?.trim()
+        if (geminiKey) {
+          return {
+            geminiKey,
+            googleClientId: data.googleClientId?.trim() || undefined,
+            googleClientSecret: data.googleClientSecret?.trim() || undefined
+          }
+        }
+      } catch (err) {
+        console.warn('[MAIN] Failed to parse hackathon-keys.json:', err)
+      }
+    }
+  }
+
+  return null
+}
+
+ipcMain.handle('config:use-hackathon-keys', async () => {
+  const keys = loadHackathonKeys()
+  if (!keys) {
+    return {
+      success: false,
+      error:
+        'Hackathon keys not configured. Add hackathon-keys.json to the project root or set HACKATHON_GEMINI_API_KEY in .env'
+    }
+  }
+
+  return await (async () => {
+    try {
+      store.set('geminiKey', keys.geminiKey)
+      gemini.initializeGemini(keys.geminiKey)
+      initRuleProcessor(keys.geminiKey)
+
+      if (keys.googleClientId && keys.googleClientSecret) {
+        store.set('googleClientId', keys.googleClientId)
+        store.set('googleClientSecret', keys.googleClientSecret)
+        googleAuth.initializeGoogleAuth(keys.googleClientId, keys.googleClientSecret)
+      }
+
+      console.log('[MAIN] Hackathon keys loaded and services initialized')
+      return { success: true }
+    } catch (error) {
+      console.error('[MAIN] Failed to load hackathon keys:', error)
+      return { success: false, error: String(error) }
+    }
+  })()
+})
+
+ipcMain.handle('config:has-hackathon-keys', () => {
+  return loadHackathonKeys() !== null
 })
 
 // ============ IPC Handlers ============

@@ -11,6 +11,9 @@ build/
 .env.local
 .env.*.local
 
+# Hackathon keys (remove from .gitignore when submitting to hackathon)
+hackathon-keys.json
+
 # OS files
 .DS_Store
 Thumbs.db
