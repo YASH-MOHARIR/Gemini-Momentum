@@ -10,21 +10,21 @@ interface EmailMatchesListProps {
 const EmailMatchesList: React.FC<EmailMatchesListProps> = ({ watcherId }) => {
   const matches = useEmailStore((state) => state.matches[watcherId] || [])
   const deleteMatch = useEmailStore((state) => state.deleteMatch)
-  
+
   const [deletingMatch, setDeletingMatch] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async (fromGmail: boolean) => {
     if (!deletingMatch) return
-    
+
     setIsDeleting(true)
     try {
-        await deleteMatch(watcherId, deletingMatch, fromGmail)
-        setDeletingMatch(null)
+      await deleteMatch(watcherId, deletingMatch, fromGmail)
+      setDeletingMatch(null)
     } catch (error) {
-        console.error("Failed to delete match:", error)
+      console.error('Failed to delete match:', error)
     } finally {
-        setIsDeleting(false)
+      setIsDeleting(false)
     }
   }
 
@@ -62,11 +62,11 @@ const EmailMatchesList: React.FC<EmailMatchesListProps> = ({ watcherId }) => {
               {match.category}
             </span>
           </div>
-          
-          <button 
+
+          <button
             onClick={(e) => {
-                e.stopPropagation()
-                setDeletingMatch(match.id)
+              e.stopPropagation()
+              setDeletingMatch(match.id)
             }}
             className="absolute top-3 right-3 p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700/50 rounded transition-colors opacity-0 group-hover:opacity-100"
             title="Delete Match"
@@ -86,7 +86,9 @@ const EmailMatchesList: React.FC<EmailMatchesListProps> = ({ watcherId }) => {
 
           {match.matchedRule && (
             <div className="mb-2 p-2 bg-blue-500/5 rounded border border-blue-500/10">
-              <span className="text-[10px] text-blue-400 font-bold uppercase block mb-0.5">Triggered Rule</span>
+              <span className="text-[10px] text-blue-400 font-bold uppercase block mb-0.5">
+                Triggered Rule
+              </span>
               <p className="text-xs text-blue-300 italic line-clamp-2">
                 &quot;{match.matchedRule}&quot;
               </p>
@@ -117,72 +119,72 @@ const EmailMatchesList: React.FC<EmailMatchesListProps> = ({ watcherId }) => {
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {deletingMatch && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl max-w-sm w-full overflow-hidden"
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl max-w-sm w-full overflow-hidden"
+            >
+              <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 className="font-semibold text-white flex items-center gap-2">
+                  <Trash2 size={18} className="text-red-400" />
+                  Delete Match
+                </h3>
+                <button
+                  onClick={() => setDeletingMatch(null)}
+                  className="text-gray-400 hover:text-white"
                 >
-                    <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-                        <h3 className="font-semibold text-white flex items-center gap-2">
-                            <Trash2 size={18} className="text-red-400" />
-                            Delete Match
-                        </h3>
-                        <button 
-                            onClick={() => setDeletingMatch(null)}
-                            className="text-gray-400 hover:text-white"
-                        >
-                            <X size={18} />
-                        </button>
-                    </div>
-                    
-                    <div className="p-4 space-y-4">
-                        <p className="text-sm text-gray-300">
-                            How would you like to delete this email?
-                        </p>
-                        
-                        <div className="space-y-2">
-                            <button
-                                onClick={() => handleDelete(true)}
-                                disabled={isDeleting}
-                                className="w-full p-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-200 rounded-lg text-sm text-left flex items-center gap-3 transition-colors group"
-                            >
-                                <div className="p-2 bg-red-500/20 rounded-full group-hover:bg-red-500/30">
-                                    <Trash2 size={16} className="text-red-400" />
-                                </div>
-                                <div>
-                                    <div className="font-semibold text-red-100">Delete from Gmail</div>
-                                    <div className="text-xs text-red-300/70">Move to Trash in Gmail & remove here</div>
-                                </div>
-                            </button>
+                  <X size={18} />
+                </button>
+              </div>
 
-                            <button
-                                onClick={() => handleDelete(false)}
-                                disabled={isDeleting}
-                                className="w-full p-3 bg-gray-700/50 border border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 rounded-lg text-sm text-left flex items-center gap-3 transition-colors group"
-                            >
-                                <div className="p-2 bg-gray-600 rounded-full group-hover:bg-gray-500">
-                                    <AlertTriangle size={16} className="text-yellow-400" />
-                                </div>
-                                <div>
-                                    <div className="font-semibold text-gray-100">Remove from Momentum</div>
-                                    <div className="text-xs text-gray-400">Only remove from this list</div>
-                                </div>
-                            </button>
-                        </div>
+              <div className="p-4 space-y-4">
+                <p className="text-sm text-gray-300">How would you like to delete this email?</p>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => handleDelete(true)}
+                    disabled={isDeleting}
+                    className="w-full p-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-200 rounded-lg text-sm text-left flex items-center gap-3 transition-colors group"
+                  >
+                    <div className="p-2 bg-red-500/20 rounded-full group-hover:bg-red-500/30">
+                      <Trash2 size={16} className="text-red-400" />
                     </div>
-                    
-                    <div className="p-3 bg-gray-900/50 flex justify-end">
-                        <button 
-                            onClick={() => setDeletingMatch(null)}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white"
-                        >
-                            Cancel
-                        </button>
+                    <div>
+                      <div className="font-semibold text-red-100">Delete from Gmail</div>
+                      <div className="text-xs text-red-300/70">
+                        Move to Trash in Gmail & remove here
+                      </div>
                     </div>
-                </motion.div>
-            </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(false)}
+                    disabled={isDeleting}
+                    className="w-full p-3 bg-gray-700/50 border border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 rounded-lg text-sm text-left flex items-center gap-3 transition-colors group"
+                  >
+                    <div className="p-2 bg-gray-600 rounded-full group-hover:bg-gray-500">
+                      <AlertTriangle size={16} className="text-yellow-400" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-100">Remove from Momentum</div>
+                      <div className="text-xs text-gray-400">Only remove from this list</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 bg-gray-900/50 flex justify-end">
+                <button
+                  onClick={() => setDeletingMatch(null)}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

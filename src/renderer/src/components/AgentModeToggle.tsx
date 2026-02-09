@@ -44,7 +44,11 @@ export default function AgentModeToggle() {
       }
     >
       {/* Icon */}
-      {isAgent ? <Bot className="w-4 h-4" /> : <img src={momentumLogo} alt="" className="w-4 h-4 object-contain" />}
+      {isAgent ? (
+        <Bot className="w-4 h-4" />
+      ) : (
+        <img src={momentumLogo} alt="" className="w-4 h-4 object-contain" />
+      )}
 
       {/* Label */}
       <span className="hidden sm:inline">{isAgent ? 'Orbit Mode' : 'Chat'}</span>

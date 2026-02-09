@@ -345,19 +345,27 @@ export async function createItemizedExpenseReportSheet(
     const detailsSheetId = sheetsArr[0]?.properties?.sheetId ?? 0
 
     // 1. Details Sheet (Flattened items)
-    const detailHeaders = ['Date', 'Vendor', 'Category', 'Item Description', 'Qty', 'Unit Price', 'Total']
+    const detailHeaders = [
+      'Date',
+      'Vendor',
+      'Category',
+      'Item Description',
+      'Qty',
+      'Unit Price',
+      'Total'
+    ]
     const detailRows: (string | number)[][] = []
-    
+
     let calculatedTotal = 0
 
     const categoryTotals: Record<string, number> = {}
 
-    sorted.forEach(exp => {
+    sorted.forEach((exp) => {
       // Logic for category totals
       let expTotal = 0
-      
+
       if (exp.items && exp.items.length > 0) {
-        exp.items.forEach(item => {
+        exp.items.forEach((item) => {
           const itemTotal = item.qty * item.price
           calculatedTotal += itemTotal
           expTotal += itemTotal
@@ -385,7 +393,7 @@ export async function createItemizedExpenseReportSheet(
           exp.amount
         ])
       }
-      
+
       categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + expTotal
     })
 
@@ -404,7 +412,7 @@ export async function createItemizedExpenseReportSheet(
     const summaryRows = Object.entries(categoryTotals)
       .sort((a, b) => b[1] - a[1])
       .map(([cat, total]) => [cat, total])
-    
+
     summaryRows.push(['GRAND TOTAL', calculatedTotal])
 
     await sheets.spreadsheets.values.update({
@@ -440,18 +448,18 @@ export async function createItemizedExpenseReportSheet(
       // Currency Format for Price/Total columns (F, G)
       {
         repeatCell: {
-          range: { 
-            sheetId: detailsSheetId, 
-            startRowIndex: 1, 
-            startColumnIndex: 5, 
-            endColumnIndex: 7 
+          range: {
+            sheetId: detailsSheetId,
+            startRowIndex: 1,
+            startColumnIndex: 5,
+            endColumnIndex: 7
           },
           cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '$#,##0.00' } } },
           fields: 'userEnteredFormat.numberFormat'
         }
       },
       // Resize Columns
-       {
+      {
         autoResizeDimensions: {
           dimensions: { sheetId: detailsSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 7 }
         }
@@ -467,7 +475,6 @@ export async function createItemizedExpenseReportSheet(
     console.log(`[SHEETS] Itemized report created: ${spreadsheetUrl}`)
 
     return { success: true, spreadsheetId, spreadsheetUrl, totalAmount: calculatedTotal }
-
   } catch (err) {
     console.error('[SHEETS] Error creating itemized report:', err)
     return { success: false, error: String(err) }

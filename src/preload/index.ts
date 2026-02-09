@@ -311,9 +311,7 @@ export interface ElectronAPI {
     deleteWatcher: (watcherId: string) => Promise<{ success: boolean }>
     pauseWatcher: (watcherId: string) => Promise<{ success: boolean }>
     resumeWatcher: (watcherId: string) => Promise<{ success: boolean }>
-    getStatus: (
-      watcherId: string
-    ) => Promise<{
+    getStatus: (watcherId: string) => Promise<{
       isActive: boolean
       isPaused: boolean
       lastChecked: string | null
@@ -569,7 +567,7 @@ const api: ElectronAPI = {
       ipcRenderer.on('watcher:error', handler)
       return () => ipcRenderer.removeListener('watcher:error', handler)
     },
-    onAllStopped: (callback: (() => void)) => {
+    onAllStopped: (callback: () => void) => {
       const handler = () => callback()
       ipcRenderer.on('watcher:all-stopped', handler)
       return () => ipcRenderer.removeListener('watcher:all-stopped', handler)
@@ -585,20 +583,45 @@ const api: ElectronAPI = {
 
   // Email Watcher
   email: {
-    startWatcher: (config: EmailWatcherConfig): Promise<{ success: boolean; watcherId?: string; error?: string }> => ipcRenderer.invoke('email:start-watcher', config),
-    stopWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:stop-watcher', watcherId),
-    deleteWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:delete-watcher', watcherId),
-    pauseWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:pause-watcher', watcherId),
-    resumeWatcher: (watcherId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('email:resume-watcher', watcherId),
-    getStatus: (watcherId: string): Promise<{ isActive: boolean; isPaused: boolean; lastChecked: string | null; stats: EmailWatcherStats } | null> => ipcRenderer.invoke('email:get-status', watcherId),
-    getAllWatchers: (): Promise<EmailWatcherConfig[]> => ipcRenderer.invoke('email:get-all-watchers'),
-    manualCheck: (watcherId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('email:manual-check', watcherId),
-    getMatches: (watcherId: string): Promise<EmailMatch[]> => ipcRenderer.invoke('email:get-matches', watcherId),
-    getActivity: (watcherId: string): Promise<EmailActivityEntry[]> => ipcRenderer.invoke('email:get-activity', watcherId),
+    startWatcher: (
+      config: EmailWatcherConfig
+    ): Promise<{ success: boolean; watcherId?: string; error?: string }> =>
+      ipcRenderer.invoke('email:start-watcher', config),
+    stopWatcher: (watcherId: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('email:stop-watcher', watcherId),
+    deleteWatcher: (watcherId: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('email:delete-watcher', watcherId),
+    pauseWatcher: (watcherId: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('email:pause-watcher', watcherId),
+    resumeWatcher: (watcherId: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('email:resume-watcher', watcherId),
+    getStatus: (
+      watcherId: string
+    ): Promise<{
+      isActive: boolean
+      isPaused: boolean
+      lastChecked: string | null
+      stats: EmailWatcherStats
+    } | null> => ipcRenderer.invoke('email:get-status', watcherId),
+    getAllWatchers: (): Promise<EmailWatcherConfig[]> =>
+      ipcRenderer.invoke('email:get-all-watchers'),
+    manualCheck: (watcherId: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('email:manual-check', watcherId),
+    getMatches: (watcherId: string): Promise<EmailMatch[]> =>
+      ipcRenderer.invoke('email:get-matches', watcherId),
+    getActivity: (watcherId: string): Promise<EmailActivityEntry[]> =>
+      ipcRenderer.invoke('email:get-activity', watcherId),
 
-    updateWatcher: (watcherId: string, updates: Partial<EmailWatcherConfig>): Promise<{ success: boolean; error?: string }> =>
+    updateWatcher: (
+      watcherId: string,
+      updates: Partial<EmailWatcherConfig>
+    ): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('email:update-watcher', watcherId, updates),
-    deleteMessage: (watcherId: string, messageId: string, fromGmail: boolean): Promise<{ success: boolean; error?: string }> =>
+    deleteMessage: (
+      watcherId: string,
+      messageId: string,
+      fromGmail: boolean
+    ): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('email:delete-message', watcherId, messageId, fromGmail),
 
     onWatcherStarted: (callback: (watcherId: string) => void) => {

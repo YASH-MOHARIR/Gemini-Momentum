@@ -439,13 +439,13 @@ function App(): ReactElement {
     const unsubMatchFound = window.api.email.onMatchFound(({ watcherId, email }) => {
       // Update Store
       useEmailStore.getState().addMatch(watcherId, email)
-      
+
       const notif = new Notification('Momentum: Email Match Found', {
         body: `${email.subject}\nFrom: ${email.from}`,
         icon: '/src/renderer/src/assets/icon.png' // consistent with tray icon
       })
       notif.onclick = () => {
-        // window.api.agent.openWindow?.() 
+        // window.api.agent.openWindow?.()
         // If we had a router, we'd navigate to watcherId
       }
     })
@@ -532,9 +532,9 @@ function App(): ReactElement {
           entries,
           grantedAt: new Date().toISOString()
         })
-        
+
         activeFolderPaths = [defaultPath]
-        
+
         // Notify user in chat stream or separate message?
         // For now, we just rely on the UI updating to show the folder
       }
@@ -542,7 +542,7 @@ function App(): ReactElement {
       const chatHistory = [...messages, { role: 'user' as const, content: userMessage }].map(
         (m) => ({ role: m.role, content: m.content })
       )
-      
+
       const selectedFiles = getSelectedFiles()
       const response = await window.api.agent.chat(
         chatHistory,
@@ -768,7 +768,11 @@ function App(): ReactElement {
                 <div className="max-w-3xl mx-auto space-y-4">
                   {messages.length === 0 && !isStreaming ? (
                     <div className="text-center py-12">
-                      <img src={momentumLogo} alt="Momentum" className="w-16 h-16 mx-auto mb-6 object-contain" />
+                      <img
+                        src={momentumLogo}
+                        alt="Momentum"
+                        className="w-16 h-16 mx-auto mb-6 object-contain"
+                      />
                       <h1 className="text-2xl font-bold text-slate-100 mb-2">
                         {hasAnyFolder ? 'Ready to help!' : 'Welcome to Momentum'}
                       </h1>
