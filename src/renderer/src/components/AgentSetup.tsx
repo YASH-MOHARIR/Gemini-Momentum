@@ -9,7 +9,7 @@ interface Props {
 }
 
 const MAX_RULES = 5
-const MAX_CHARS = 200
+const MAX_CHARS = 400
 
 const EXAMPLE_RULES = [
   'PDFs go to Documents folder, organized by month',
@@ -19,7 +19,11 @@ const EXAMPLE_RULES = [
   'Archives (.zip, .rar) to Archives folder'
 ]
 
-export default function AgentSetup({ onStart, isEditing = false, onCancel }: Props): React.ReactElement {
+export default function AgentSetup({
+  onStart,
+  isEditing = false,
+  onCancel
+}: Props): React.ReactElement {
   const { getActiveWatcher } = useAgentStore()
   const activeWatcher = getActiveWatcher()
   const currentConfig = activeWatcher?.config
@@ -33,23 +37,28 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
       ? currentConfig.rules
       : [{ id: '1', text: '', enabled: true, order: 1 }]
   )
-  const [enableLog, setEnableLog] = useState(isEditing && currentConfig ? currentConfig.enableActivityLog ?? true : true)
+  const [enableLog, setEnableLog] = useState(
+    isEditing && currentConfig ? (currentConfig.enableActivityLog ?? true) : true
+  )
   const [isStarting, setIsStarting] = useState(false)
 
   // The useEffect for loading existing config is no longer needed as state is initialized directly from currentConfig
 
-  const handleSelectFolder = async (): Promise<void> => { // Added return type
+  const handleSelectFolder = async (): Promise<void> => {
+    // Added return type
     const folder = await window.api.selectFolder()
     if (folder && !selectedFolders.includes(folder)) {
       setSelectedFolders([...selectedFolders, folder])
     }
   }
 
-  const removeFolder = (folderToRemove: string): void => { // Added return type
+  const removeFolder = (folderToRemove: string): void => {
+    // Added return type
     setSelectedFolders(selectedFolders.filter((f) => f !== folderToRemove))
   }
 
-  const addRule = (): void => { // Added return type
+  const addRule = (): void => {
+    // Added return type
     if (rules.length >= MAX_RULES) return
     const newRule: AgentRule = {
       id: Date.now().toString(),
@@ -60,11 +69,13 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
     setRules([...rules, newRule])
   }
 
-  const updateRuleText = (id: string, text: string): void => { // Added return type
+  const updateRuleText = (id: string, text: string): void => {
+    // Added return type
     setRules(rules.map((r) => (r.id === id ? { ...r, text: text.slice(0, MAX_CHARS) } : r)))
   }
 
-  const removeRule = (id: string): void => { // Added return type
+  const removeRule = (id: string): void => {
+    // Added return type
     if (rules.length <= 1) return // Keep at least one rule
     setRules(rules.filter((r) => r.id !== id))
   }
@@ -338,7 +349,9 @@ export default function AgentSetup({ onStart, isEditing = false, onCancel }: Pro
       {!canStart && (
         <div className="text-xs text-center text-slate-500">
           {selectedFolders.length === 0 && 'Select a folder to watch'}
-          {selectedFolders.length > 0 && !rules.some((r) => r.text.trim()) && 'Add at least one rule'}
+          {selectedFolders.length > 0 &&
+            !rules.some((r) => r.text.trim()) &&
+            'Add at least one rule'}
         </div>
       )}
     </div>
