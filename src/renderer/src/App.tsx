@@ -14,7 +14,8 @@ import {
   ChevronUp,
   MessageSquare,
   HardDrive,
-  Orbit
+  Orbit,
+  Check
 } from 'lucide-react'
 import FileTree from './components/FileTree'
 import momentumLogo from './assets/momentum.png'
@@ -237,6 +238,9 @@ function App(): ReactElement {
     isAgentReady,
     storageAnalysis,
     beforeAfterResult,
+    isFileSelected,
+    toggleFileSelection,
+    selectFile,
     addFolder,
     removeFolder,
     setSelectedFile,
@@ -867,46 +871,80 @@ function App(): ReactElement {
                 </button>
               </div>
             )}
-            {folders.map((folder) => (
-              <div key={folder.path} className="border-b border-slate-700/50">
-                <div
-                  className={`flex items-center gap-2 px-3 py-2 group cursor-pointer transition-colors ${
-                    isSelectingFolder
-                      ? 'bg-emerald-900/30 hover:bg-emerald-800/40'
-                      : 'bg-slate-750 hover:bg-slate-700/30'
-                  }`}
-                  onClick={() =>
-                    isSelectingFolder ? handleFolderClickForAgent(folder.path) : null
-                  }
-                >
-                  <FolderOpen
-                    className={`w-4 h-4 flex-shrink-0 ${isAgentMode ? 'text-emerald-400' : 'text-sky-400'}`}
+            {folders.map((folder) => {
+              const isFolderSelected = isFileSelected(folder.path)
+              const isFolderPrimary = selectedFile?.path === folder.path
+              const isFolderHighlighted = isFolderSelected || isFolderPrimary
+
+              const handleFolderClick = () => {
+                if (isSelectingFolder) {
+                  handleFolderClickForAgent(folder.path)
+                  return
+                }
+
+                // Normal selection mode - toggle folder selection
+                if (isFolderHighlighted) {
+                  toggleFileSelection(folder.path)
+                } else {
+                  selectFile(folder.path)
+                }
+
+                // Also set as the currently focused file/folder
+                handleFileSelect({
+                  path: folder.path,
+                  name: folder.name,
+                  isDirectory: true,
+                  size: 0,
+                  modified: new Date().toISOString()
+                } as FileEntry)
+              }
+
+              return (
+                <div key={folder.path} className="border-b border-slate-700/50">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-2 group cursor-pointer transition-colors ${
+                      isSelectingFolder
+                        ? 'bg-emerald-900/30 hover:bg-emerald-800/40'
+                        : isFolderHighlighted
+                        ? 'bg-sky-600/30 hover:bg-sky-600/40 text-sky-100 border-l-2 border-sky-500'
+                        : 'bg-slate-750 hover:bg-slate-700/30'
+                    }`}
+                    onClick={handleFolderClick}
+                  >
+                    <FolderOpen
+                      className={`w-4 h-4 flex-shrink-0 ${
+                        isAgentMode ? 'text-emerald-400' : isFolderHighlighted ? 'text-sky-400' : 'text-sky-400'
+                      }`}
+                    />
+                    <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>
+                      {folder.name}
+                    </span>
+                    {isFolderHighlighted && !isSelectingFolder && (
+                      <Check className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                    )}
+                    {!isSelectingFolder && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeFolder(folder.path)
+                        }}
+                        className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-all"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                  <FileTree
+                    entries={folder.entries}
+                    onFileSelect={handleFileSelect}
+                    selectedPath={selectedFile?.path}
+                    onFolderClick={isSelectingFolder ? handleFolderClickForAgent : undefined}
+                    highlightFolders={isSelectingFolder}
+                    activePaths={isSelectingFolder ? activeFolderPaths : undefined}
                   />
-                  <span className="text-sm text-slate-200 truncate flex-1" title={folder.path}>
-                    {folder.name}
-                  </span>
-                  {!isSelectingFolder && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeFolder(folder.path)
-                      }}
-                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-all"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
                 </div>
-                <FileTree
-                  entries={folder.entries}
-                  onFileSelect={handleFileSelect}
-                  selectedPath={selectedFile?.path}
-                  onFolderClick={isSelectingFolder ? handleFolderClickForAgent : undefined}
-                  highlightFolders={isSelectingFolder}
-                  activePaths={isSelectingFolder ? activeFolderPaths : undefined}
-                />
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Selection Action Bar */}

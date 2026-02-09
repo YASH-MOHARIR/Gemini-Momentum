@@ -160,23 +160,24 @@ function FileTreeItem({
     }
 
     // Regular click: Single selection
+    // Check actual selection state from store (not just prop) to determine if we should toggle
+    const actuallySelected = isMultiSelected || isSelected
+    
     if (!isFolder) {
       // If file is already selected, unselect it
-      if (isSelected || isMultiSelected) {
+      if (actuallySelected) {
         toggleFileSelection(entry.path)
       } else {
         selectFile(entry.path)
       }
     } else {
       // For folders: if already selected, unselect it; otherwise select it
-      if (isSelected || isMultiSelected) {
+      if (actuallySelected) {
         toggleFileSelection(entry.path)
+        // Don't expand when unselecting
       } else {
         selectFile(entry.path)
-      }
-      
-      // Handle folder expansion (only if not unselecting)
-      if (!isSelected && !isMultiSelected) {
+        // Handle folder expansion only when selecting (not unselecting)
         if (!isExpanded && children.length === 0) {
           setIsLoading(true)
           try {

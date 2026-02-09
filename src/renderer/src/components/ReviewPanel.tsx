@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AlertTriangle, Trash2, Check, X, RefreshCw, FileWarning, CheckCircle } from 'lucide-react'
 import { useAppStore } from '../stores/appStore'
 
@@ -39,16 +39,50 @@ export default function ReviewPanel({ onComplete }: ReviewPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(false)
   const [isExecuting, setIsExecuting] = useState(false)
+  const actionsRef = useRef<PendingAction[]>([])
 
   const highlightFiles = useAppStore((state) => state.highlightFiles)
   const refreshFolder = useAppStore((state) => state.refreshFolder)
+
+  // Keep actionsRef in sync with actions state
+  useEffect(() => {
+    actionsRef.current = actions
+  }, [actions])
 
   const fetchActions = async () => {
     setIsLoading(true)
     try {
       const pending = await window.api.pending.getAll()
+      const currentActions = actionsRef.current
+      
+      // Preserve existing selection state - only add new actions as selected
+      setSelectedIds((prevSelected) => {
+        const newSelected = new Set(prevSelected)
+        const existingIds = new Set(currentActions.map((a) => a.id))
+        const newIds = new Set(pending.map((a) => a.id))
+        
+        // Remove IDs that no longer exist
+        existingIds.forEach((id) => {
+          if (!newIds.has(id)) {
+            newSelected.delete(id)
+          }
+        })
+        
+        // Add new actions as selected (only if they weren't explicitly unchecked)
+        // If an action was previously unchecked, don't re-add it
+        pending.forEach((action) => {
+          if (!existingIds.has(action.id)) {
+            // New action - add it as selected by default
+            newSelected.add(action.id)
+          }
+          // Existing actions keep their selection state
+        })
+        
+        return newSelected
+      })
+      
+      // Update actions
       setActions(pending as PendingAction[])
-      setSelectedIds(new Set(pending.map((a) => a.id)))
     } catch (err) {
       console.error('Failed to fetch pending actions:', err)
     }
