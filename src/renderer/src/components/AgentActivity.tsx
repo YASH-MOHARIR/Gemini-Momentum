@@ -114,20 +114,24 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
 }
 
 export default function AgentActivity({ onStop, onPause, onEditRules }: Props) {
-  const { config, stats, status, recentActivity, getRunningDuration } = useAgentStore()
+  const { status, getActiveWatcher, getWatcherDuration } = useAgentStore()
+  const activeWatcher = getActiveWatcher()
   const [duration, setDuration] = useState(0)
 
   // Update duration every second
   useEffect(() => {
-    if (status !== 'running') return
+    if (status !== 'running' || !activeWatcher) return
 
     const interval = setInterval(() => {
-      setDuration(getRunningDuration())
+      setDuration(getWatcherDuration(activeWatcher.config.id))
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [status, getRunningDuration])
+  }, [status, getWatcherDuration, activeWatcher])
 
+  if (!activeWatcher) return null
+
+  const { config, stats, recentActivity } = activeWatcher
   const isPaused = status === 'paused'
 
   const getDisplayFolderName = () => {
