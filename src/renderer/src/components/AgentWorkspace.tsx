@@ -30,7 +30,6 @@ import { useAgentStore, AgentConfig, AgentRule, ActivityEntry } from '../stores/
 import { useEmailStore } from '../stores/emailStore'
 import EmailWatcherCard from './EmailWatcher/EmailWatcherCard'
 
-
 const EXAMPLE_RULES = [
   'PDFs go to Documents folder',
   'Receipts to Expenses, rename with date and vendor',
@@ -54,7 +53,8 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     id: 'downloads',
     name: 'Downloads Organizer',
     icon: <Download className="w-4 h-4" />,
-    description: 'The ultimate cleaner for your Downloads folder. It automatically categorizes every file you download into specific folders (Documents, Images, Videos, Archives, Installers) based on file extension, keeping your workspace spotless.',
+    description:
+      'The ultimate cleaner for your Downloads folder. It automatically categorizes every file you download into specific folders (Documents, Images, Videos, Archives, Installers) based on file extension, keeping your workspace spotless.',
     color: 'bg-sky-600 hover:bg-sky-500',
     defaultFolders: ['Downloads'],
     rules: [
@@ -69,7 +69,8 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     id: 'receipts',
     name: 'Receipt Processor',
     icon: <Receipt className="w-4 h-4" />,
-    description: 'An AI-powered assistant for your finances. It intelligently detects receipts, invoices, and bills, renames them using the vendor name, date, and total amount (e.g., "Uber_2023-10-12_$25.00"), and files them into an Expenses folder for easy reporting.',
+    description:
+      'An AI-powered assistant for your finances. It intelligently detects receipts, invoices, and bills, renames them using the vendor name, date, and total amount (e.g., "Uber_2023-10-12_$25.00"), and files them into an Expenses folder for easy reporting.',
     color: 'bg-emerald-600 hover:bg-emerald-500',
     defaultFolders: ['Receipts'],
     rules: [
@@ -81,7 +82,8 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     id: 'screenshots',
     name: 'Screenshot Manager',
     icon: <Camera className="w-4 h-4" />,
-    description: 'Stop your desktop from becoming a mess of screenshots. This agent instantly detects new screen captures and recordings, moving them to dedicated "Screenshots" and "Recordings" folders so your desktop remains clean and organized.',
+    description:
+      'Stop your desktop from becoming a mess of screenshots. This agent instantly detects new screen captures and recordings, moving them to dedicated "Screenshots" and "Recordings" folders so your desktop remains clean and organized.',
     color: 'bg-purple-600 hover:bg-purple-500',
     defaultFolders: ['Desktop'],
     rules: ['Screenshots to Screenshots folder', 'Screen recordings to Recordings folder']
@@ -90,7 +92,8 @@ const WATCHER_TEMPLATES: WatcherTemplate[] = [
     id: 'documents',
     name: 'Document Archiver',
     icon: <FileText className="w-4 h-4" />,
-    description: 'Ideal for shared drives or busy project folders. It identifies files that haven\'t been opened in over 6 months and moves them to an "Archive" folder. It also segregates large files (>100MB) to help you manage disk space effectively.',
+    description:
+      'Ideal for shared drives or busy project folders. It identifies files that haven\'t been opened in over 6 months and moves them to an "Archive" folder. It also segregates large files (>100MB) to help you manage disk space effectively.',
     color: 'bg-amber-600 hover:bg-amber-500',
     defaultFolders: ['Documents'],
     rules: [
@@ -782,13 +785,8 @@ const MAX_RULES = 10
 const MAX_CHARS = 100
 
 export default function AgentWorkspace() {
-  const {
-    watchers,
-    createWatcher,
-    folderSelectMode,
-    cancelFolderSelect,
-    updateWatcherConfig
-  } = useAgentStore()
+  const { watchers, createWatcher, folderSelectMode, cancelFolderSelect, updateWatcherConfig } =
+    useAgentStore()
 
   const watcherIds = Array.from(watchers.keys())
   const isSelectingFolder = folderSelectMode !== 'none'
@@ -811,7 +809,7 @@ export default function AgentWorkspace() {
   const handleCreateEmailWatcher = async () => {
     if (isCreatingWatcher) return
     setIsCreatingWatcher(true)
-    
+
     try {
       const id = `email-watcher-${Date.now()}`
       await createEmailWatcher({
@@ -826,7 +824,11 @@ export default function AgentWorkspace() {
       })
     } catch (e) {
       console.error(e)
-      alert(e instanceof Error ? e.message : 'Failed to create watcher. Please try causing a check for duplicate IDs or watcher limit.')
+      alert(
+        e instanceof Error
+          ? e.message
+          : 'Failed to create watcher. Please try causing a check for duplicate IDs or watcher limit.'
+      )
     } finally {
       setIsCreatingWatcher(false)
     }
@@ -915,11 +917,9 @@ export default function AgentWorkspace() {
                 )}
               </h1>
               <p className="text-slate-400 mt-2 text-sm leading-relaxed max-w-2xl">
-                {activeTab === 'files' ? (
-                  'Autonomous background agents that verify, organize, and manage your local files 24/7.'
-                ) : (
-                  'Monitor your inbox for specific emails (e.g. receipts, jobs), categorize them with AI, and automate actions like notifications.'
-                )}
+                {activeTab === 'files'
+                  ? 'Autonomous background agents that verify, organize, and manage your local files 24/7.'
+                  : 'Monitor your inbox for specific emails (e.g. receipts, jobs), categorize them with AI, and automate actions like notifications.'}
               </p>
             </div>
 
@@ -958,7 +958,11 @@ export default function AgentWorkspace() {
                   disabled={isCreatingWatcher}
                   className={`flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-blue-900/20 whitespace-nowrap w-full sm:w-auto ${isCreatingWatcher ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  {isCreatingWatcher ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <Plus size={16} />}
+                  {isCreatingWatcher ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                  ) : (
+                    <Plus size={16} />
+                  )}
                   Add Email Watcher
                 </button>
               )}

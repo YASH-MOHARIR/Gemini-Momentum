@@ -44,7 +44,7 @@ const EmailActivityFeed: React.FC<EmailActivityFeedProps> = ({ watcherId }) => {
               </span>
               <span>•</span>
               <span>Conf: {Math.round(entry.confidence * 100)}%</span>
-              
+
               {entry.matchedRule && (
                 <>
                   <span>•</span>
