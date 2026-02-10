@@ -5,6 +5,7 @@ export interface EmailAction {
   type: 'log_to_excel' | 'log_to_sheet' | 'notify' | 'mark_read' | 'archive' | 'star' | 'delete'
   filename?: string // For log_to_excel
   sheetName?: string // For log_to_sheet (Spreadsheet Title)
+  tabName?: string // For log_to_sheet (tab/sheet name, default Sheet1)
   data?: Record<string, unknown> // For log_to_excel/sheet (extracted fields)
   reason?: string
 }
