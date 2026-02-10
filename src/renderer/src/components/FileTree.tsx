@@ -102,7 +102,6 @@ function FileTreeItem({
   const selectFile = useAppStore((state) => state.selectFile)
   const selectRange = useAppStore((state) => state.selectRange)
   const lastSelectedPath = useAppStore((state) => state.lastSelectedPath)
-  const clearSelection = useAppStore((state) => state.clearSelection)
 
   const isMultiSelected = isFileSelected(entry.path)
 
