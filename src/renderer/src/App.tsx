@@ -315,6 +315,7 @@ function App(): ReactElement {
         return () => clearTimeout(timeoutId)
       }
     }
+    return
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFile, pendingRequest, isProcessing])
 
@@ -513,7 +514,7 @@ function App(): ReactElement {
     })
 
     // Undo operations
-    const unsubUndoAdded = window.api.agent.onUndoOperationAdded?.((data) => {
+    const unsubUndoAdded = window.api.agent.onUndoOperationAdded?.((_data) => {
       // Refresh undo operations list
       window.api.agent.getRecentUndoOperations().then(setUndoOperations).catch(console.error)
     })
@@ -565,22 +566,9 @@ function App(): ReactElement {
     setSelectedFile(entry)
   }
 
-  // Helper function to check if a task requires file/folder selection
-  const requiresFileSelection = (taskType: string): boolean => {
-    const fileOperationTypes = [
-      'single_file_op',
-      'multi_file_op',
-      'file_organization',
-      'data_extraction',
-      'image_analysis',
-      'batch_processing'
-    ]
-    return fileOperationTypes.includes(taskType)
-  }
-
   // Process the actual chat request
   const processChatRequest = async (
-    userMessage: string,
+    _userMessage: string,
     chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
     retryAfterSelection = false
   ) => {
@@ -650,7 +638,7 @@ function App(): ReactElement {
       const response = await window.api.agent.chat(
         chatHistory,
         activeFolderPaths,
-        selectedPaths,
+        selectedPaths?.[0],
         isSelectedDirectory
       )
       setIsStreaming(false)

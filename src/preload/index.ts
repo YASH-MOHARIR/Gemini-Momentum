@@ -250,6 +250,21 @@ export interface ElectronAPI {
     test: () => Promise<{ success: boolean; error?: string }>
     getMetrics: () => Promise<SessionMetrics>
     resetMetrics: () => Promise<void>
+    getRecentUndoOperations: () => Promise<Array<{
+      id: string
+      type: 'move' | 'rename' | 'delete' | 'create'
+      timestamp: number
+      originalPath: string
+      newPath?: string
+      originalName?: string
+      newName?: string
+    }>>
+    undoOperation: (operationId: string) => Promise<{ success: boolean; error?: string }>
+    onUndoOperationAdded: (callback: (data: {
+      type: string
+      originalPath: string
+      newPath?: string
+    }) => void) => () => void
     onStreamChunk: (callback: (chunk: string) => void) => () => void
     onStreamEnd: (callback: () => void) => () => void
     onToolCall: (
@@ -302,6 +317,8 @@ export interface ElectronAPI {
   config: {
     getApiKeys: () => Promise<{ hasGeminiKey: boolean }>
     saveApiKeys: (keys: { geminiKey: string }) => Promise<{ success: boolean; error?: string }>
+    hasHackathonKeys: () => Promise<boolean>
+    useHackathonKeys: () => Promise<{ success: boolean; error?: string }>
   }
   email: {
     startWatcher: (

@@ -84,20 +84,21 @@ export async function executeTool(
 
       case 'move_file': {
         const moveResult = await fileSystem.moveFile(args.source_path, args.destination_path)
-        if (moveResult.success && moveResult.data?.newPath) {
+        const moveData = moveResult.data as { newPath?: string } | undefined
+        if (moveResult.success && moveData?.newPath) {
           // Track for undo
           const undoService = await import('../undoService')
           undoService.undoService.addOperation({
             type: 'move',
             originalPath: args.source_path,
-            newPath: moveResult.data.newPath
+            newPath: moveData.newPath
           })
           // Notify UI about undo availability
           if (mainWindow) {
             mainWindow.webContents.send('undo:operation-added', {
               type: 'move',
               originalPath: args.source_path,
-              newPath: moveResult.data.newPath
+              newPath: moveData.newPath
             })
           }
         }
@@ -107,14 +108,15 @@ export async function executeTool(
 
       case 'rename_file': {
         const renameResult = await fileSystem.renameFile(args.path, args.new_name)
-        if (renameResult.success && renameResult.data?.newPath) {
+        const renameData = renameResult.data as { newPath?: string } | undefined
+        if (renameResult.success && renameData?.newPath) {
           // Track for undo
           const undoService = await import('../undoService')
           const originalName = path.basename(args.path)
           undoService.undoService.addOperation({
             type: 'rename',
             originalPath: args.path,
-            newPath: renameResult.data.newPath,
+            newPath: renameData.newPath,
             originalName,
             newName: args.new_name
           })
@@ -123,7 +125,7 @@ export async function executeTool(
             mainWindow.webContents.send('undo:operation-added', {
               type: 'rename',
               originalPath: args.path,
-              newPath: renameResult.data.newPath,
+              newPath: renameData.newPath,
               originalName,
               newName: args.new_name
             })

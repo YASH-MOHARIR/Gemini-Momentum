@@ -247,6 +247,21 @@ declare global {
     test: () => Promise<{ success: boolean; error?: string }>
     getMetrics: () => Promise<SessionMetrics>
     resetMetrics: () => Promise<void>
+    getRecentUndoOperations: () => Promise<Array<{
+      id: string
+      type: 'move' | 'rename' | 'delete' | 'create'
+      timestamp: number
+      originalPath: string
+      newPath?: string
+      originalName?: string
+      newName?: string
+    }>>
+    undoOperation: (operationId: string) => Promise<{ success: boolean; error?: string }>
+    onUndoOperationAdded: (callback: (data: {
+      type: string
+      originalPath: string
+      newPath?: string
+    }) => void) => () => void
     onStreamChunk: (callback: (chunk: string) => void) => () => void
     onStreamEnd: (callback: (chunk: string) => void) => () => void
     onToolCall: (
@@ -300,6 +315,8 @@ declare global {
       googleClientId?: string
       googleClientSecret?: string
     }) => Promise<{ success: boolean; error?: string }>
+    hasHackathonKeys: () => Promise<boolean>
+    useHackathonKeys: () => Promise<{ success: boolean; error?: string }>
   }
 
   interface EmailAPI {
